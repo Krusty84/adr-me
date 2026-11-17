@@ -24,8 +24,8 @@ Use the template without adding, deleting, renaming, or reordering its attribute
 - **Be so brief every word you write costs you $1,000.**
 - Use short, direct sentences, one idea per sentence, and active voice.
 - State verifiable facts. Do not invent the task, intent, reasons, alternatives, risks, or outcomes.
-- Use `Not recorded.` for a missing *Context*, *Rationale*, *Alternatives*, or *Consequences* item. Do not invent evidence to complete a section.
-- The *Decision* and *Implementation* sections must contain supported facts. If the decision cannot be identified, stop and request human input.
+- Use `Not recorded.` for a missing _Context_, _Rationale_, _Alternatives_, or _Consequences_ item. Do not invent evidence to complete a section.
+- The _Decision_ and _Implementation_ sections must contain supported facts. If the decision cannot be identified, stop and request human input.
 - The validator is not a certification of ASD-STE100. Review wording and terminology separately.
 
 ## Fixed document contract
@@ -72,7 +72,7 @@ Do not add `Verified At` or `Scope` yet: these are reserved for a future ADR fre
 
 1. Ask the user to select a commit, range, change, or component only if it cannot be determined from the request.
 2. Inspect relevant `git log`, `git show`, `git blame`, tests, existing documentation, and available PRs/issues. Do not assume those external sources are available.
-3. Group commits by *technical decision*. Do not create one ADR for every commit.
+3. Group commits by _technical decision_. Do not create one ADR for every commit.
 4. Record only confirmed behavior and documented reasons. Distinguish code facts from historical intent. Put `Not recorded.` when reasons or rejected alternatives are unknown.
 5. Draft the same template using `Record Type: Retrospective` and the correct `Evidence` value. Add direct URLs to the actual implementation commits.
 6. Request approval of the decision, wording, and ADR-only commit. After approval, set `Status: Accepted` and the current ADR creation date.
@@ -85,7 +85,6 @@ Do not add `Verified At` or `Scope` yet: these are reserved for a future ADR fre
 - Use the full SHA. Include multiple URLs when the decision spans multiple commits.
 - If the remote is missing, the web URL is unknown, or a commit cannot be verified, stop before committing the ADR. Ask the user for a verifiable repository URL or correct Git history.
 - Rebase, amend, and cherry-pick can change SHAs. After such operations, rerun validation and update affected ADR URLs in a **new** commit. A local object check does not prove that a URL is reachable on the server.
-
 
 ## Validation (mandatory)
 
