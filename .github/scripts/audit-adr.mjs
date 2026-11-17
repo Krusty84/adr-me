@@ -7,13 +7,15 @@
 // Informational ADR audit. Requires a full Git checkout (fetch-depth: 0).
 
 import { appendFileSync } from "node:fs";
+import { isAbsolute } from "node:path";
 import {
-  CODE_PATHS,
   git,
   gitList,
-  isAncestor,
   validateAdrs,
-} from "./adr-validation.mjs";
+} from "../../create-adr-md/scripts/validate-adr.mjs";
+
+// Optional repository-relative files and directories for audit review hints.
+const CODE_PATHS = [];
 
 function warning(title, message) {
   const escaped = message
@@ -36,13 +38,14 @@ function changedCode(sha) {
     gitList(
       "diff-tree",
       "--root",
+      "--no-renames",
       "--no-commit-id",
       "-r",
       "--name-only",
       "-z",
       sha,
       "--",
-      ...CODE_PATHS,
+      ...CODE_PATHS.map((path) => `:(literal)${path}`),
     ).length > 0
   );
 }
@@ -64,83 +67,49 @@ function main() {
   const invalid = [];
 
   for (const { path, links, errors } of validateAdrs("HEAD")) {
-    if (errors.length === 0) {
-      const changedAt = git(
-        "log",
-        "--no-renames",
-        "--format=%H",
-        "-n",
-        "1",
-        "HEAD",
-        "--",
-        path,
-      );
-      for (const linked of links) {
-        if (
-          !changedAt ||
-          linked === changedAt ||
-          !isAncestor(linked, changedAt)
-        ) {
-          errors.push(
-            `${linked} must be an earlier commit in the history of the last ADR change.`,
-          );
-        }
-      }
-    }
     if (errors.length > 0) {
       invalid.push({ path, errors });
       warning("Invalid ADR", `${path}\n${errors.join("\n")}`);
       continue;
     }
-    const addedAt = git(
-      "log",
-      "--no-renames",
-      "--diff-filter=A",
-      "--format=%H",
-      "-n",
-      "1",
-      "HEAD",
-      "--",
-      path,
-    );
-    for (const linked of links) {
-      if (addedAt && linked !== addedAt && isAncestor(linked, addedAt))
-        referenced.add(linked);
-    }
-  }
-
-  const commits = git("rev-list", "--no-merges", `--max-count=${limit}`, "HEAD")
-    .split("\n")
-    .filter(Boolean);
-  const impl = commits.filter(changedCode);
-  const missing = impl.filter((sha) => !referenced.has(sha));
-  for (const sha of missing) {
-    warning(
-      "ADR missing",
-      `Commit ${sha.slice(0, 12)} has no valid ADR reference (${commitPrefix}${sha})`,
-    );
+    for (const linked of links) referenced.add(linked);
   }
 
   const lines = [
     "## ADR audit",
     "",
-    `Scanned **${commits.length}** recent non-merge commits. Implementation commits **${impl.length}**. ` +
-      `Missing ADR **${missing.length}**. Invalid ADR **${invalid.length}**.`,
+    `Invalid ADR **${invalid.length}**.`,
     "",
   ];
-  if (missing.length > 0) {
-    lines.push("| Implementation commit | ADR |", "| --- | --- |");
-    for (const sha of missing) {
-      lines.push(
-        `| [\`${sha.slice(0, 12)}\`](${commitPrefix}${sha}) | Missing |`,
-      );
-    }
-    lines.push("");
-  } else {
+  const reviewEnabled = Array.isArray(CODE_PATHS) && CODE_PATHS.length > 0 &&
+    CODE_PATHS.every((path) => typeof path === "string" && path.trim().length > 0 &&
+      !isAbsolute(path) && !path.split(/[\\/]/).includes(".."));
+  if (reviewEnabled) {
+    const commits = git("rev-list", "--no-merges", `--max-count=${limit}`, "HEAD")
+      .split("\n")
+      .filter(Boolean);
+    const review = commits.filter((sha) => changedCode(sha) && !referenced.has(sha));
     lines.push(
-      "All inspected implementation commits have valid ADR references.",
+      "### Changes to review",
+      "",
+      `Scanned **${commits.length}** recent non-merge commits in the configured paths.`,
+      "These commits have no link from a valid ADR. An ADR is optional.",
       "",
     );
+    if (review.length > 0) lines.push("| Commit |", "| --- |");
+    for (const sha of review) {
+      lines.push(
+        `| [\`${sha.slice(0, 12)}\`](${commitPrefix}${sha}) |`,
+      );
+    }
+    if (review.length === 0) lines.push("No changes to review in this scan.");
+    lines.push("");
+  } else {
+    const note = Array.isArray(CODE_PATHS) && CODE_PATHS.length === 0
+      ? "Review hints skipped: CODE_PATHS is not configured."
+      : "Review hints skipped: CODE_PATHS must be a list of relative file or directory paths.";
+    lines.push(note, "");
+    console.log(note);
   }
   if (invalid.length > 0) {
     lines.push("### Invalid ADRs", "", "| File | Errors |", "| --- | --- |");
@@ -159,9 +128,7 @@ function main() {
     "Warnings keep this GitHub Actions job successful.",
   );
   summary(lines);
-  console.log(
-    `ADR audit: ${impl.length} implementation commit(s), ${missing.length} without ADR, ${invalid.length} invalid ADR(s).`,
-  );
+  console.log(`ADR audit: ${invalid.length} invalid ADR(s).`);
 }
 
 try {

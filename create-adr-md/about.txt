@@ -2,20 +2,19 @@
 
 Validate ADRs created with `create-adr-md` before and after a push.
 
-1. **Local `pre-push`** validates added and changed ADRs. All new code commits in a push must be referenced by a new ADR committed **later in the same push**. Errors block the push.
-2. **GitHub Actions `push`** validates ADRs in `HEAD` and checks recent code commits. It reports invalid ADRs and missing references in warnings and the Actions run **Summary**. Warnings keep the job successful.
+1. **Local `pre-push`** validates added and changed ADRs in the final pushed revision. Invalid documents block the push. Code without an ADR does not.
+2. **GitHub Actions `push`** validates all ADRs in `HEAD`. It reports invalid ADRs as warnings in the log and run **Summary**. Optional review hints list recent commits in configured paths. Warnings keep the job successful.
 
 Both scripts use `create-adr-md/scripts/validate-adr.mjs`. Requires Git and Node.js 18+.
 
 ## Install
 
-Copy this `create-adr-md/` directory into the target repository root. Copy the contents of its `.github/` and `.githooks/` directories into the matching directories at that root. The hook and CI load the validator at `create-adr-md/scripts/validate-adr.mjs`. Commit the skill directory and the installed files so GitHub Actions can read them.
+Copy `create-adr-md/`, `.github/`, and `.githooks/` from the root of this package into the target repository root. Merge the contents with existing directories and files; do not replace the directories. The hook and CI load the validator at `create-adr-md/scripts/validate-adr.mjs`. Commit the skill directory and the installed files so GitHub Actions can read them.
 
 The target repository must contain these files.
 
 ```text
 .githooks/pre-push
-.github/scripts/adr-validation.mjs
 .github/scripts/check-adr.mjs
 .github/scripts/audit-adr.mjs
 .github/workflows/adr-check.yml
@@ -31,11 +30,15 @@ chmod +x .githooks/pre-push
 
 Make sure the hook is committed as executable (`git update-index --chmod=+x .githooks/pre-push`). Git hooks are not automatically installed on other clones; each machine must set `core.hooksPath`.
 
-Edit `CODE_PATHS` in `.github/scripts/adr-validation.mjs` if the code lives outside `src/`, `app/`, `lib/`, `test/`, `tests/`.
+To enable review hints, set `CODE_PATHS` in `.github/scripts/audit-adr.mjs` to relative file or directory paths, for example `["Sources/", "main.swift", "Package.swift"]`. The default is `[]`. An empty or invalid list skips hints with a note. ADR validation still runs. This setting does not affect the hook.
 
 The hook passes the push remote name to the validator. GitHub Actions uses `origin` through `ADR_REMOTE` in the workflow. Both require a configured Git remote and full local implementation commits.
 
 ## Normal workflow
+
+Offer an ADR when a technical decision and its reasons are confirmed. The user can defer it. If the same decision already has an ADR, update that file: keep its ID, creation date, and valid links, then add the new facts and commit links. A new decision gets a new ADR. Do not create one ADR per code commit.
+
+When the user chooses to record a decision, commit its implementation before the ADR.
 
 ```sh
 # Commit A: implementation
@@ -85,34 +88,34 @@ git commit -m 'docs: record cache synchronization ADR'
 git push origin main
 ```
 
-- The hook blocks the push if commit A is not covered by a new ADR in commit B.
-- GitHub Actions audits recent commit history and reports missing ADR links and invalid ADRs.
+- The hook blocks invalid added or changed ADRs, not code without an ADR. It checks the final tree, so an ADR corrected before the push can pass.
+- GitHub Actions reports invalid ADRs. Review hints are informational; they do not show that an ADR is required.
 
-Run the regression checks from the target repository root.
+Run the policy regression checks from the target repository root.
 
 ```sh
-node --test create-adr-md/tests/adr.test.mjs
+node --test create-adr-md/tests/adr-policy.test.mjs
 ```
 
 ## Important details
 
-- The Actions scan checks the **last 30 non-merge commits**, including earlier pushes. Change `ADR_SCAN_LIMIT` in `.github/workflows/adr-check.yml` if needed (1–500).
+- Review hints scan the **last 30 non-merge commits**, including earlier pushes, for changes in `CODE_PATHS` without links from valid ADRs. Change `ADR_SCAN_LIMIT` in `.github/workflows/adr-check.yml` if needed (1–500).
 - Every `.md` file under `docs/adr/` must use the new template and the path `docs/adr/NNNN-lowercase-slug.md`. References are URL bullets in `## Implementation Commit`.
 - Store each ADR as a regular file. Give all four metadata attributes non-empty values.
 - The title can contain at most 120 characters. The 350-word prose budget covers the title and the text in Context, Decision, Rationale, Alternatives, Consequences, and Implementation.
 - The scripts validate a temporary copy of `docs/adr/` from the checked commit. The validator uses the source repository's Git objects and remote settings. It checks content and duplicate IDs against that committed tree. Local file and index changes do not affect validation.
-- `Agent-Session` and `Retrospective` ADRs can reference earlier commits already in `main`. Each reference must precede the commit that last changed the ADR. The audit counts each linked commit as covered when it also precedes the ADR's addition. Other valid links can be added during later edits.
-- A missed ADR can be committed later (for example after bypassing the hook). The **next** Actions run will no longer list the implementation commit, provided it is within the scan window. Old Actions run summaries are immutable.
+- `Agent-Session` and `Retrospective` ADRs can reference earlier commits already in `main`. Each reference must precede the commit that last changed the ADR. Links added during later edits are valid on the same terms.
+- An ADR can be committed later. The next audit omits its valid linked commits from review hints. Old Actions run summaries are immutable.
 - Review **Actions → ADR audit (main) → Summary** or the annotation log.
-- A `git push --no-verify` can bypass the local hook. GitHub Actions detects the missing reference **after** the commit reached `main`.
-- Each new code commit still needs a new ADR added later in the *same push*. The ADR and its reference must remain present at the pushed revision. A standalone ADR for an earlier push is allowed.
-- Keep the history linear and avoid rebase/squash after the ADR references an implementation SHA: rewritten commits invalidate SHA links.
+- A `git push --no-verify` can bypass the local hook. GitHub Actions reports invalid documents after the commit reaches `main`.
+- ADR deletion and unchanged old documents do not block a push. The first publication of a branch checks all ADRs in its final tree. The audit always validates all ADRs in `HEAD`.
+- Merge commits are supported. Rebase, amend, and squash can change implementation SHAs; verify and update affected ADR links after those operations.
 - Review factual accuracy and ASD-STE100 wording separately from automated validation.
 
 ## Files
 
 - `.githooks/pre-push` runs the blocking hook.
 - `.github/scripts/check-adr.mjs` checks the push.
-- `.github/scripts/adr-validation.mjs` calls the validator and defines code paths.
+- `create-adr-md/scripts/validate-adr.mjs` provides CLI and committed-tree validation.
 - `.github/workflows/adr-check.yml` runs the GitHub Actions audit.
-- `.github/scripts/audit-adr.mjs` audits recent commits.
+- `.github/scripts/audit-adr.mjs` audits ADRs and defines the optional code paths for review hints.

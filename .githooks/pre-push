@@ -1,5 +1,5 @@
 #!/bin/sh
-# Prevent a direct push to main if the pushed commits violate ADR policy.
+# Check added and changed ADRs in a direct push to main.
 set -eu
 
 remote_name="${1:-origin}"

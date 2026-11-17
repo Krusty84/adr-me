@@ -6,9 +6,22 @@
 
 // Strict, offline ADR schema and local Git verification. Node.js 18+; no dependencies.
 
-import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
-import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { spawnSync } from "node:child_process";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { execFileSync, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 const SECTIONS = [
   "Context",
@@ -41,7 +54,7 @@ function usage() {
     "Requires a local Git repository and a configured web-accessible Git remote (default: origin).",
   );
 }
-function git(repo, ...args) {
+function gitInRepo(repo, ...args) {
   const result = spawnSync("git", args, {
     cwd: repo,
     encoding: "utf8",
@@ -145,7 +158,7 @@ function main() {
   }
 
   const cwd = opts.repo ? resolve(opts.repo) : process.cwd();
-  const repo = git(cwd, "rev-parse", "--show-toplevel");
+  const repo = gitInRepo(cwd, "rev-parse", "--show-toplevel");
   if (!repo) {
     console.error(
       "Error: --repo or current directory is not inside a Git worktree",
@@ -293,7 +306,7 @@ function main() {
     fail("ADR prose appears to contain non-English script");
   }
 
-  const remoteUrl = git(root, "remote", "get-url", opts.remote);
+  const remoteUrl = gitInRepo(root, "remote", "get-url", opts.remote);
   if (!remoteUrl) fail(`Git remote ${opts.remote} does not exist`);
   const remote = remoteUrl ? parseRemote(remoteUrl) : null;
   if (remoteUrl && !remote)
@@ -329,7 +342,7 @@ function main() {
     ) {
       fail(`Commit URL does not match Git remote ${opts.remote}: ${raw}`);
     }
-    if (git(root, "cat-file", "-t", parsed.sha) !== "commit") {
+    if (gitInRepo(root, "cat-file", "-t", parsed.sha) !== "commit") {
       fail(`Implementation commit is not present locally: ${parsed.sha}`);
     }
   }
@@ -350,4 +363,122 @@ function finish(file) {
     );
   }
 }
-main();
+
+export function git(...args) {
+  return execFileSync("git", args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+}
+export function gitList(...args) {
+  return execFileSync("git", args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  })
+    .split("\0")
+    .filter(Boolean);
+}
+export function isAncestor(a, b) {
+  return (
+    spawnSync("git", ["merge-base", "--is-ancestor", a, b], { stdio: "ignore" })
+      .status === 0
+  );
+}
+
+export function validateAdrs(revision, paths) {
+  const entries = gitList(
+    "ls-tree",
+    "-r",
+    "-z",
+    revision,
+    "--",
+    "docs/adr/",
+  ).map((entry) => {
+    const tab = entry.indexOf("\t");
+    const [mode, type, object] = entry.slice(0, tab).split(" ");
+    return { mode, type, object, path: entry.slice(tab + 1) };
+  });
+  const files = entries.map((entry) => entry.path);
+  const selected = paths ?? files.filter((path) => path.endsWith(".md"));
+  if (selected.length === 0) return [];
+
+  const validator = fileURLToPath(import.meta.url);
+  const gitDir = git("rev-parse", "--absolute-git-dir");
+  const snapshot = realpathSync(mkdtempSync(join(tmpdir(), "adr-validation-")));
+  const remote = process.env.ADR_REMOTE || "origin";
+  const env = { ...process.env, GIT_DIR: gitDir, GIT_WORK_TREE: snapshot };
+
+  try {
+    for (const entry of entries) {
+      const target = join(snapshot, entry.path);
+      if (entry.type === "commit") {
+        mkdirSync(target, { recursive: true });
+        continue;
+      }
+      mkdirSync(dirname(target), { recursive: true });
+      const content = execFileSync("git", ["cat-file", "blob", entry.object], {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      if (entry.mode === "120000")
+        symlinkSync(content.toString("utf8"), target);
+      else writeFileSync(target, content);
+    }
+
+    return selected.map((path) => {
+      const result = spawnSync(
+        process.execPath,
+        [validator, path, "--repo", snapshot, "--remote", remote],
+        { cwd: snapshot, env, encoding: "utf8" },
+      );
+      if (result.status !== 0) {
+        const message =
+          result.error?.message ||
+          result.stderr?.trim() ||
+          result.stdout?.trim() ||
+          "ADR validator failed";
+        return { path, links: [], errors: [message] };
+      }
+
+      const lines = readFileSync(join(snapshot, path), "utf8").split("\n");
+      const heading = lines.findIndex(
+        (line) =>
+          line.startsWith("## ") &&
+          line.slice(3).trim() === "Implementation Commit",
+      );
+      const links = lines
+        .slice(heading + 1)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => parseCommitURL(line.slice(2).trim()).sha);
+      const changedAt = git(
+        "log",
+        "--no-renames",
+        "--format=%H",
+        "-n",
+        "1",
+        revision,
+        "--",
+        path,
+      );
+      const errors = [];
+      for (const linked of links) {
+        if (!changedAt || linked === changedAt || !isAncestor(linked, changedAt)) {
+          errors.push(
+            `${linked} must be an earlier commit in the history of the last ADR change.`,
+          );
+        }
+      }
+      return { path, links, errors };
+    });
+  } finally {
+    rmSync(snapshot, { recursive: true, force: true });
+  }
+}
+
+if (
+  process.argv[1] &&
+  existsSync(process.argv[1]) &&
+  realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  main();
+}
