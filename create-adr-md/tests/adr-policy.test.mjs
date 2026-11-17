@@ -26,7 +26,7 @@ function document(links, recordType = 'Agent-Session') {
       .map(sha => `- https://github.com/example/adr-policy/commit/${sha}`).join('\n'));
 }
 
-function fixture(t, { objectFormat = 'sha1', codePaths } = {}) {
+function fixture(t, { objectFormat = 'sha1', codePaths = [] } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'adr-policy-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const repo = join(directory, 'target repository');
@@ -36,11 +36,9 @@ function fixture(t, { objectFormat = 'sha1', codePaths } = {}) {
   for (const folder of ['create-adr-md', '.github', '.githooks']) {
     cpSync(join(source, folder), join(repo, folder), { recursive: true });
   }
-  if (codePaths !== undefined) {
-    const config = join(repo, '.github/scripts/audit-adr.mjs');
-    writeFileSync(config, readFileSync(config, 'utf8')
-      .replace(/const CODE_PATHS = .*;/, `const CODE_PATHS = ${JSON.stringify(codePaths)};`));
-  }
+  const config = join(repo, '.github/scripts/audit-adr.mjs');
+  writeFileSync(config, readFileSync(config, 'utf8')
+    .replace(/const CODE_PATHS = .*;/, `const CODE_PATHS = ${JSON.stringify(codePaths)};`));
   const env = Object.fromEntries(Object.entries(process.env)
     .filter(([key]) => !/^(?:GIT_|GITHUB_|ADR_)/.test(key)));
   Object.assign(env, {
@@ -99,12 +97,13 @@ function status(result, expected) {
   assert.equal(result.status, expected, `${result.stdout}\n${result.stderr}`);
 }
 
-function auditWarnings(result, invalid = 0) {
+function auditWarnings(result, invalid = 0, missing = 0) {
   status(result, 0);
-  assert.equal(result.stdout.split('\n').filter(line => line.startsWith('::warning')).length, invalid,
-    result.stdout);
-  assert.ok(!result.stdout.includes('ADR missing'), result.stdout);
-  assert.ok(!result.summary.includes('Missing ADR'), result.summary);
+  const warnings = result.stdout.split('\n').filter(line => line.startsWith('::warning'));
+  assert.equal(warnings.length, invalid + missing, result.stdout);
+  assert.equal(warnings.filter(line => line.startsWith('::warning title=Invalid ADR::')).length, invalid);
+  assert.equal(warnings.filter(line => line.startsWith('::warning title=ADR missing::')).length, missing);
+  if (missing > 0) assert.ok(result.summary.includes(`Missing ADR **${missing}**`), result.summary);
 }
 
 test('importing the validator is silent and preserves the exit code', t => {
@@ -131,7 +130,7 @@ test('the validator CLI preserves success, validation, and usage exit codes', t 
 });
 
 test('code without ADR passes, including root files and merge commits', t => {
-  const repo = fixture(t);
+  const repo = fixture(t, { codePaths: ['main.swift', 'Sources/', 'src/'] });
   repo.code('main.swift');
   repo.git('checkout', '-qb', 'side');
   repo.code('Sources/cache.mjs');
@@ -140,9 +139,9 @@ test('code without ADR passes, including root files and merge commits', t => {
   repo.git('merge', '-q', '--no-ff', '-m', 'Merge code', 'side');
   status(repo.hook(), 0);
   const audit = repo.audit();
-  auditWarnings(audit);
-  assert.match(audit.summary, /CODE_PATHS.*not configured/);
-  assert.ok(!audit.summary.includes('All inspected implementation commits'));
+  auditWarnings(audit, 0, 3);
+  assert.match(audit.summary, /Scanned \*\*4\*\* recent non-merge commits/);
+  assert.ok(!audit.summary.includes(repo.git('rev-parse', 'HEAD')));
 });
 
 for (const objectFormat of ['sha1', 'sha256']) {
@@ -234,7 +233,7 @@ for (const reason of ['unknown commit', 'remote mismatch']) {
   });
 }
 
-test('relative root files and arbitrary directories produce only review hints', t => {
+test('relative root files and arbitrary directories produce non-blocking warnings', t => {
   const repo = fixture(t, { codePaths: ['main.swift', 'Sources/'] });
   const linked = repo.code('main.swift');
   const review = repo.code('Sources/cache.mjs');
@@ -243,10 +242,38 @@ test('relative root files and arbitrary directories produce only review hints', 
   repo.commit();
   status(repo.hook(), 0);
   const audit = repo.audit();
-  auditWarnings(audit);
+  auditWarnings(audit, 0, 1);
+  const warning = audit.stdout.split('\n').find(line => line.startsWith('::warning title=ADR missing::'));
+  assert.ok(warning.includes(review), warning);
+  assert.ok(warning.includes(`https://github.com/example/adr-policy/commit/${review}`), warning);
   assert.ok(audit.summary.includes(review), audit.summary);
   assert.ok(!audit.summary.includes(linked), audit.summary);
   assert.ok(!audit.summary.includes(excluded), audit.summary);
+});
+
+test('bundled code paths include scripts, hooks, and tests', t => {
+  const repo = fixture(t);
+  repo.write('.github/scripts/audit-adr.mjs', readFileSync(join(source, '.github/scripts/audit-adr.mjs'), 'utf8'));
+  const commits = [
+    '.github/scripts/probe.mjs', '.githooks/probe',
+    'create-adr-md/scripts/probe.mjs', 'create-adr-md/tests/probe.test.mjs',
+  ].map(path => repo.code(path));
+  repo.write('docs/notes.md', 'Documentation only.\n');
+  const documentation = repo.commit();
+  const audit = repo.audit();
+  auditWarnings(audit, 0, 5);
+  for (const sha of [repo.base, ...commits]) assert.ok(audit.summary.includes(sha), sha);
+  assert.ok(!audit.summary.includes(documentation), audit.summary);
+});
+
+test('audit scans only the last 30 non-merge commits', t => {
+  const repo = fixture(t, { codePaths: ['src/'] });
+  const commits = Array.from({ length: 31 }, () => repo.code());
+  const audit = repo.audit();
+  auditWarnings(audit, 0, 30);
+  assert.match(audit.summary, /Scanned \*\*30\*\* recent non-merge commits/);
+  assert.ok(!audit.summary.includes(commits[0]), audit.summary);
+  for (const sha of commits.slice(1)) assert.ok(audit.summary.includes(sha), sha);
 });
 
 for (const codePaths of [[], null, 'src/', [''], ['/tmp/code'], ['../src/']]) {

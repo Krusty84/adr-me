@@ -22,11 +22,12 @@ Use the template without adding, deleting, renaming, or reordering its attribute
 - Write **all ADR prose in English**, regardless of the agent session language.
 - **Write in ASD-STE100, Issue 9.** Use its approved vocabulary and writing rules where applicable. Keep established code terms, API names, and identifiers unchanged.
 - **Be so brief every word you write costs you $1,000.**
+- Keep the title within 120 characters. Keep the title and the six prose sections within 350 words.
 - Use short, direct sentences, one idea per sentence, and active voice.
 - State verifiable facts. Do not invent the task, intent, reasons, alternatives, risks, or outcomes.
 - Use `Not recorded.` for a missing _Context_, _Rationale_, _Alternatives_, or _Consequences_ item. Do not invent evidence to complete a section.
 - The _Decision_ and _Implementation_ sections must contain supported facts. If the decision cannot be identified, stop and request human input.
-- The validator is not a certification of ASD-STE100. Review wording and terminology separately.
+- Review English, length limits, and ASD-STE100 separately. The validator checks structure and commit links.
 
 ## Fixed document contract
 
@@ -112,7 +113,7 @@ The validator checks:
 - Required attributes and allowed values.
 - Exact section structure and order.
 - Required content and valid dates.
-- Word count and English-script heuristic.
+- Unfilled fields from the bundled template.
 - HTTPS implementation commit URLs.
 - Git remote identity.
 - Existence of local implementation commits.

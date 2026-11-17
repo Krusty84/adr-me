@@ -7,6 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const packagePath = fileURLToPath(new URL('../', import.meta.url));
+const source = fileURLToPath(new URL('../../', import.meta.url));
 const template = readFileSync(join(packagePath, 'templates', 'adr.md'), 'utf8');
 const adrPath = 'docs/adr/0001-cache.md';
 
@@ -48,8 +49,11 @@ function fixture(t, objectFormat = 'sha1') {
   const installed = join(repo, 'create-adr-md');
   cpSync(packagePath, installed, { recursive: true });
   for (const folder of ['.github', '.githooks']) {
-    cpSync(join(installed, folder), join(repo, folder), { recursive: true });
+    cpSync(join(source, folder), join(repo, folder), { recursive: true });
   }
+  const config = join(repo, '.github/scripts/audit-adr.mjs');
+  writeFileSync(config, readFileSync(config, 'utf8')
+    .replace(/const CODE_PATHS = .*;/, 'const CODE_PATHS = ["src/"];'));
   const git = (...args) => execFileSync('git', args, {
     cwd: repo, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
@@ -180,20 +184,23 @@ for (const target of ['0001-cache.md', 'missing.md']) {
 
 test('a later valid reference preserves earlier coverage', t => {
   const repo = fixture(t);
+  auditResult(repo.audit(), 1, 0);
   repo.write(adrPath, document([repo.implementation]));
   repo.commit();
+  auditResult(repo.audit(), 0, 0);
   const later = repo.code();
+  auditResult(repo.audit(), 1, 0);
   repo.write(adrPath, document([repo.implementation, later]));
   repo.commit();
   status(repo.validate(), 0);
   status(repo.hook(later), 0);
   const result = repo.audit();
-  auditResult(result, 1, 0);
-  assert.ok(result.summary.includes(later));
+  auditResult(result, 0, 0);
+  assert.ok(!result.summary.includes(later));
   assert.ok(!result.summary.includes(repo.implementation));
 });
 
-test('editing an existing ADR cannot cover new code in the push', t => {
+test('editing an existing ADR can cover new code in the push', t => {
   const repo = fixture(t);
   repo.write(adrPath, document([repo.implementation]));
   const before = repo.commit();
@@ -201,10 +208,9 @@ test('editing an existing ADR cannot cover new code in the push', t => {
   repo.write(adrPath, document([repo.implementation, later]));
   repo.commit();
   const result = repo.hook(before);
-  status(result, 1);
-  assert.match(result.stderr, /lack a later ADR/);
-  assert.ok(result.stderr.includes(later));
-  auditResult(repo.audit(), 1, 0);
+  status(result, 0);
+  assert.ok(result.stdout.includes(later));
+  auditResult(repo.audit(), 0, 0);
 });
 
 test('a reference to another branch fails history checks', t => {
@@ -233,36 +239,73 @@ test('audit checks ancestry at the last ADR change', t => {
 });
 
 for (const length of [120, 121]) {
-  test(`checks the ${length}-character title boundary`, t => {
+  test(`accepts a ${length}-character title for manual style review`, t => {
     const repo = fixture(t);
     repo.write(adrPath, document([repo.implementation], { title: 'A'.repeat(length) }));
     repo.commit();
-    const expected = length === 120 ? 0 : 1;
-    status(repo.validate(), expected);
-    status(repo.hook(), expected);
-    auditResult(repo.audit(), expected, expected);
+    status(repo.validate(), 0);
+    status(repo.hook(), 0);
+    auditResult(repo.audit(), 0, 0);
   });
 }
 
 for (const wordCount of [350, 351]) {
-  test(`checks the ${wordCount}-word prose boundary`, t => {
+  test(`accepts ${wordCount}-word prose for manual style review`, t => {
     const repo = fixture(t);
     // The title and the other five text sections contain 15 words.
     const context = Array(wordCount - 15).fill('word').join(' ');
     repo.write(adrPath, document([repo.implementation], { context }));
     repo.commit();
-    const expected = wordCount === 350 ? 0 : 1;
-    status(repo.validate(), expected);
-    status(repo.hook(), expected);
-    auditResult(repo.audit(), expected, expected);
+    status(repo.validate(), 0);
+    status(repo.hook(), 0);
+    auditResult(repo.audit(), 0, 0);
   });
 }
 
-test('the README installation and example work with a real local push', t => {
+for (const [name, options] of [
+  ['technical notation', {
+    title: 'Map<T> cache',
+    context: 'Use `Map<string, number>`, <div>{{value}}</div>, and `TODO`, `TBD`, `FIXME` identifiers.',
+  }],
+  ['non-English text', { context: 'Кэш хранит значения.' }],
+]) {
+  test(`accepts ${name} without prose heuristics`, t => {
+    const repo = fixture(t);
+    repo.write(adrPath, document([repo.implementation], options));
+    repo.commit();
+    status(repo.validate(), 0);
+    status(repo.hook(), 0);
+    auditResult(repo.audit(), 0, 0);
+  });
+}
+
+for (const [name, change, error] of [
+  ['template title', text => text.replace('# ADR-0001: Cache', '# ADR-0001: <Short decision title>'), /Title contains a placeholder/],
+  ['template section', text => text.replace('Use a shared cache.', '<One approved technical decision.>'), /Decision contains a placeholder/],
+  ['empty section', text => text.replace('Use a shared cache.', ''), /Decision section is missing or empty/],
+  ['missing section', text => text.replace('## Rationale\n', ''), /Sections must appear exactly once/],
+  ['reordered sections', text => text.replace('## Context', '## Temporary')
+    .replace('## Decision', '## Context').replace('## Temporary', '## Decision'), /Sections must appear exactly once/],
+  ['non-HTTPS link', text => text.replace('- https://', '- http://'), /Each Implementation Commit entry must be a bullet/],
+  ['short SHA', text => text.replace(/(\/commit\/[0-9a-f]{12})[0-9a-f]+/, '$1'), /Invalid commit URL/],
+]) {
+  test(`rejects ${name} through all entry points`, t => {
+    const repo = fixture(t);
+    repo.write(adrPath, change(document([repo.implementation])));
+    repo.commit();
+    const result = repo.validate();
+    status(result, 1);
+    assert.match(result.stderr, error);
+    status(repo.hook(), 1);
+    auditResult(repo.audit(), 1, 1);
+  });
+}
+
+test('the installation guide example works with a real local push', t => {
   const repo = fixture(t);
-  const readme = readFileSync(join(packagePath, 'README.md'), 'utf8');
-  const example = readme.match(/```markdown\n([\s\S]*?)\n```/);
-  assert.ok(example, 'README contains a complete ADR example');
+  const guide = readFileSync(join(packagePath, 'about.txt'), 'utf8');
+  const example = guide.match(/```markdown\n([\s\S]*?)\n```/);
+  assert.ok(example, 'Installation guide contains a complete ADR example');
   const path = 'docs/adr/0042-cache-sync.md';
   repo.write(path, example[1].replace('OWNER/REPO', 'example/adr-tests')
     .replace('0123456789abcdef0123456789abcdef01234567', repo.implementation) + '\n');
@@ -274,6 +317,6 @@ test('the README installation and example work with a real local push', t => {
   status(repo.run('git', ['push', '-q', 'origin', 'main']), 0);
   auditResult(repo.audit(), 0, 0);
   repo.code();
-  status(repo.run('git', ['push', '-q', 'origin', 'main']), 1);
+  status(repo.run('git', ['push', '-q', 'origin', 'main']), 0);
   auditResult(repo.audit(), 1, 0);
 });

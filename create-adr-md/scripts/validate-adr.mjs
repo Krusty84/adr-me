@@ -38,8 +38,10 @@ const VALUES = {
   "Record Type": ["Agent-Session", "Retrospective"],
   Evidence: ["Agent Session", "Git History", "Manual", "Mixed"],
 };
-const MAX_TITLE_CHARACTERS = 120;
-const MAX_PROSE_WORDS = 350;
+const TEMPLATE_PLACEHOLDERS = readFileSync(
+  new URL("../templates/adr.md", import.meta.url),
+  "utf8",
+).match(/<[^<>\n]+>/g) ?? [];
 const SHA_PATTERN = "(?:[0-9a-f]{40}|[0-9a-f]{64})";
 const errors = [];
 
@@ -143,7 +145,7 @@ function isValidDate(s) {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === s;
 }
 function isPlaceholder(s) {
-  return /<[^<>\n]+>|\b(?:TODO|TBD|FIXME)\b|\{\{.+?\}\}/i.test(s);
+  return TEMPLATE_PLACEHOLDERS.some((placeholder) => s.includes(placeholder));
 }
 
 function main() {
@@ -201,8 +203,6 @@ function main() {
   if (title && nameMatch && title[1] !== nameMatch[1])
     fail("ADR ID in the title does not match the filename");
   if (title && isPlaceholder(title[2])) fail("Title contains a placeholder");
-  if (title && title[2].length > MAX_TITLE_CHARACTERS)
-    fail(`ADR title must be at most ${MAX_TITLE_CHARACTERS} characters`);
   if (nameMatch) {
     const collisions = readdirSync(join(root, "docs", "adr")).filter(
       (name) =>
@@ -287,23 +287,6 @@ function main() {
     ) {
       fail(`${section} must contain verified facts, not "Not recorded."`);
     }
-  }
-
-  const prose = [
-    title?.[2] ?? "",
-    ...SECTIONS.slice(0, -1).map((s) => bodies.get(s) ?? ""),
-  ].join(" ");
-  const words = prose.match(/[\p{L}\p{N}]+(?:[-'][\p{L}\p{N}]+)*/gu) ?? [];
-  if (words.length > MAX_PROSE_WORDS)
-    fail(
-      `ADR exceeds the ${MAX_PROSE_WORDS}-word prose budget (${words.length} words)`,
-    );
-  if (
-    /[\p{Script=Cyrillic}\p{Script=Han}\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Hangul}]/u.test(
-      prose,
-    )
-  ) {
-    fail("ADR prose appears to contain non-English script");
   }
 
   const remoteUrl = gitInRepo(root, "remote", "get-url", opts.remote);

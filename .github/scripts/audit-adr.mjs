@@ -14,8 +14,8 @@ import {
   validateAdrs,
 } from "../../create-adr-md/scripts/validate-adr.mjs";
 
-// Optional repository-relative files and directories for audit review hints.
-const CODE_PATHS = [];
+// Repository-relative code paths. Set these for each target repository.
+const CODE_PATHS = [".github/scripts/", ".githooks/", "create-adr-md/scripts/", "create-adr-md/tests/"];
 
 function warning(title, message) {
   const escaped = message
@@ -65,6 +65,7 @@ function main() {
   const commitPrefix = `${server}/${repo}/commit/`;
   const referenced = new Set();
   const invalid = [];
+  let missing = 0;
 
   for (const { path, links, errors } of validateAdrs("HEAD")) {
     if (errors.length > 0) {
@@ -89,8 +90,11 @@ function main() {
       .split("\n")
       .filter(Boolean);
     const review = commits.filter((sha) => changedCode(sha) && !referenced.has(sha));
+    missing = review.length;
     lines.push(
       "### Changes to review",
+      "",
+      `Missing ADR **${missing}**.`,
       "",
       `Scanned **${commits.length}** recent non-merge commits in the configured paths.`,
       "These commits have no link from a valid ADR. An ADR is optional.",
@@ -98,6 +102,7 @@ function main() {
     );
     if (review.length > 0) lines.push("| Commit |", "| --- |");
     for (const sha of review) {
+      warning("ADR missing", `No ADR links to code commit ${sha}: ${commitPrefix}${sha}`);
       lines.push(
         `| [\`${sha.slice(0, 12)}\`](${commitPrefix}${sha}) |`,
       );
@@ -128,7 +133,7 @@ function main() {
     "Warnings keep this GitHub Actions job successful.",
   );
   summary(lines);
-  console.log(`ADR audit: ${invalid.length} invalid ADR(s).`);
+  console.log(`ADR audit: ${missing} without ADR, ${invalid.length} invalid ADR(s).`);
 }
 
 try {
