@@ -1,0 +1,13 @@
+#!/bin/sh
+# Prevent a direct push to main if the pushed commits violate ADR policy.
+set -eu
+
+remote_name="${1:-origin}"
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$remote_ref" = 'refs/heads/main' ] || continue
+
+  BASE_SHA="$remote_sha" \
+  HEAD_SHA="$local_sha" \
+  ADR_REMOTE="$remote_name" \
+    node .github/scripts/check-adr.mjs || exit 1
+done

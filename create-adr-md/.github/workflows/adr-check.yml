@@ -1,0 +1,32 @@
+name: ADR audit (main)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adr-audit:
+    name: ADR warnings (non-blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout commit and full history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Show ADR warnings
+        env:
+          ADR_SCAN_LIMIT: '30'
+          ADR_REMOTE: origin
+        run: node .github/scripts/audit-adr.mjs
