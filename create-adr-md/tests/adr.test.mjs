@@ -10,9 +10,18 @@ const packagePath = fileURLToPath(new URL('../', import.meta.url));
 const source = fileURLToPath(new URL('../../', import.meta.url));
 const template = readFileSync(join(packagePath, 'templates', 'adr.md'), 'utf8');
 const adrPath = 'docs/adr/0001-cache.md';
+const relatedTableHeader = '| Symbol | File | Type |\n|---|---|---|';
 const relatedSymbolsTemplate = '## Related Symbols\n\n' +
-  '- `<repository-relative-path#QualifiedName>` — ' +
-  '<Optional English description. Delete this section when no links are confirmed.>\n\n';
+  `${relatedTableHeader}\n` +
+  '| `<QualifiedName>` | `<repository-relative-path>` | <type-from-types.md> |\n\n';
+const tableCell = value => value.replaceAll('|', '\\|');
+const relatedRow = (symbol = 'cache', file = 'src/cache.mjs', type = 'constant') =>
+  `| \`${tableCell(symbol)}\` | \`${tableCell(file)}\` | ${type} |`;
+const relatedTable = (rows = relatedRow()) => `${relatedTableHeader}\n${rows}`;
+const typeCatalog = readFileSync(join(packagePath, 'references', 'types.md'), 'utf8');
+const catalogTypes = [...new Set(
+  [...typeCatalog.matchAll(/^\| `([a-z]+(?:-[a-z]+)*)` \|/gm)].map(match => match[1]),
+)];
 
 function document(links, {
   recordType = 'Agent-Session', title = 'Cache', context = 'Not recorded.', relatedSymbols = null,
@@ -34,7 +43,7 @@ function document(links, {
       .map(sha => `- https://github.com/example/adr-tests/commit/${sha}`).join('\n'));
 }
 
-function relatedDocument(links, body = '- `src/cache.mjs#cache`', before = 'Implementation Commit') {
+function relatedDocument(links, body = relatedTable(), before = 'Implementation Commit') {
   const text = document(links, { relatedSymbols: body });
   const section = `## Related Symbols\n\n${body}\n\n`;
   if (before === 'Implementation Commit') return text;
@@ -359,7 +368,16 @@ test('accepts an empty Related Symbols section', t => {
   auditResult(repo.audit(), 0, 0);
 });
 
-test('accepts symbol kinds, Markdown lists, and descriptions', t => {
+test('accepts a header-only Related Symbols table', t => {
+  const repo = fixture(t);
+  repo.write(adrPath, relatedDocument([repo.implementation], relatedTableHeader));
+  repo.commit();
+  status(repo.validate(), 0);
+  status(repo.hook(), 0);
+  auditResult(repo.audit(), 0, 0);
+});
+
+test('accepts symbols, paths, types, and aligned separators', t => {
   const repo = fixture(t);
   const path = 'src/[pressure]/Pressure Service.ts';
   repo.write(path, 'export interface Calculator { calculate(): number; }\n' +
@@ -367,12 +385,29 @@ test('accepts symbol kinds, Markdown lists, and descriptions', t => {
     'export function validatePressure() {}\nexport let pressure = 0;\nexport let Pressure = 0;\n' +
     'export const MAX_PRESSURE = 10;\n');
   const implementation = repo.commit();
-  const symbols = ['Calculator', 'PressureService', 'PressureService.flowRate',
-    'PressureService.calculate', 'validatePressure', 'pressure', 'Pressure', 'MAX_PRESSURE'];
-  const markers = ['-', '*', '+', '1.', '2)'];
-  const body = symbols.map((name, index) =>
-    `${markers[index % markers.length]} \`${path}#${name}\` — verified symbol.\n   Used by the decision.`).join('\n\n');
+  const entries = [
+    ['Calculator', 'interface'], ['PressureService', 'class'],
+    ['PressureService.flowRate', 'property'], ['PressureService.calculate', 'method'],
+    ['validatePressure', 'function'], ['pressure', 'variable'], ['Pressure', 'variable'],
+    ['PressureService.#privateFlow', 'field'], ['Math.operator/', 'operator'],
+    ['Bitmask.operator|', 'operator'],
+    ['Callable::operator()', 'operator'], ['MAX_PRESSURE', 'constant'],
+  ];
+  const body = '| Symbol | File | Type |\n|:---|:---:|---:|\n' + entries
+    .map(([symbol, type]) => relatedRow(symbol, path, type)).join('\n');
   repo.write(adrPath, relatedDocument([repo.implementation, implementation], body));
+  repo.commit();
+  status(repo.validate(), 0);
+  status(repo.hook(), 0);
+  auditResult(repo.audit(), 0, 0);
+});
+
+test('accepts every type declared by the language catalog', t => {
+  const repo = fixture(t);
+  assert.ok(catalogTypes.length > 0);
+  const rows = catalogTypes.map((type, index) =>
+    relatedRow(`CatalogSymbol${index}`, 'src/cache.mjs', type)).join('\n');
+  repo.write(adrPath, relatedDocument([repo.implementation], relatedTable(rows)));
   repo.commit();
   status(repo.validate(), 0);
   status(repo.hook(), 0);
@@ -382,11 +417,13 @@ test('accepts symbol kinds, Markdown lists, and descriptions', t => {
 for (const marker of ['```', '~~~~']) {
   test(`ignores fenced examples (${marker}) and prose mentions as exact links`, t => {
     const repo = fixture(t);
-    const body = '- `src/cache.mjs#cache`\n\n' +
-      `${marker}markdown\n## Related Symbols\n- \`missing.ts#Missing\`\n${marker}\n`;
+    const body = relatedTable() + `\n\n${marker}markdown\n` +
+      '| Symbol | File | Type |\n|---|---|---|\n' +
+      '| `Missing` | `missing.ts` | class |\n' + `${marker}\n`;
     const text = relatedDocument([repo.implementation], body).replace('Not recorded.',
       `Call \`cache.get()\` and read \`missingSymbol\`.\n\n${marker}markdown\n` +
-      '## Related Symbols\n- `missing.ts#Missing`\n## Implementation Commit\n' +
+      '## Related Symbols\n| Symbol | File | Type |\n|---|---|---|\n' +
+      '| `Missing` | `missing.ts` | class |\n## Implementation Commit\n' +
       '- https://github.com/example/adr-tests/commit/ffffffffffffffffffffffffffffffffffffffff\n' +
       `### Example heading\n${marker}\n`);
     repo.write(adrPath, text);
@@ -397,32 +434,49 @@ for (const marker of ['```', '~~~~']) {
   });
 }
 
-for (const identifier of [
-  'src/cache.mjs:cache', '#cache', 'src/cache.mjs#', 'src/cache.mjs#cache#extra',
-  'src/cache.mjs#cache()', 'src/cache.mjs#cache value', 'src\\cache.mjs#cache',
-  '/src/cache.mjs#cache', 'C:/src/cache.mjs#cache', '../src/cache.mjs#cache',
-  './src/cache.mjs#cache', 'src//cache.mjs#cache', 'src/cache.mjs:12#cache',
-  'src/cache.mjs#cache:12',
+for (const symbol of [
+  '', 'cache()', '(cache)', 'cache value', 'cache\\value', 'cache:12',
 ]) {
-  test(`rejects malformed related symbol ${identifier}`, t => {
+  test(`rejects malformed related symbol ${JSON.stringify(symbol)}`, t => {
     const repo = fixture(t);
-    repo.write(adrPath, relatedDocument([repo.implementation], `- \`${identifier}\``));
+    repo.write(adrPath, relatedDocument([repo.implementation],
+      relatedTable(relatedRow(symbol))));
     const result = repo.validate();
     status(result, 1);
-    assert.match(result.stderr, /Invalid related symbol identifier/);
+    assert.match(result.stderr, /Invalid related symbol:/);
+  });
+}
+
+for (const file of [
+  'src\\cache.mjs', '/src/cache.mjs', 'C:/src/cache.mjs', '../src/cache.mjs',
+  './src/cache.mjs', 'src//cache.mjs', 'src/cache.mjs:12',
+]) {
+  test(`rejects malformed related file ${file}`, t => {
+    const repo = fixture(t);
+    repo.write(adrPath, relatedDocument([repo.implementation],
+      relatedTable(relatedRow('cache', file))));
+    const result = repo.validate();
+    status(result, 1);
+    assert.match(result.stderr, /Invalid related symbol file:/);
   });
 }
 
 for (const [name, body, error] of [
-  ['missing backticks', '- src/cache.mjs#cache', /Each Related Symbols entry/],
-  ['unlisted entry', '`src/cache.mjs#cache`', /Each Related Symbols entry/],
-  ['two identifiers in one item', '- `src/cache.mjs#cache` and `src/cache.mjs#other`', /Each Related Symbols entry/],
-  ['identifier in a description', '- `src/cache.mjs#cache`\n  `src/cache.mjs#other`', /Each Related Symbols entry/],
-  ['duplicate reference', '- `src/cache.mjs#cache`\n- `src/cache.mjs#cache` — repeated.', /Duplicate related symbol/],
-  ['missing file', '- `src/missing.mjs#cache`', /Source file does not exist with exact case/],
-  ['wrong filename case', '- `src/Cache.mjs#cache`', /Source file does not exist with exact case/],
-  ['wrong directory case', '- `Src/cache.mjs#cache`', /Source file does not exist with exact case/],
-  ['directory', '- `src#cache`', /Source file does not exist with exact case/],
+  ['old list format', '- `src/cache.mjs#cache`', /must start with the table header/],
+  ['wrong header', '| File | Symbol | Type |\n|---|---|---|', /must start with the table header/],
+  ['missing separator', '| Symbol | File | Type |\n' + relatedRow(), /table separator/],
+  ['short separator', '| Symbol | File | Type |\n|--|---|---|', /table separator/],
+  ['missing symbol backticks', relatedTable('| cache | `src/cache.mjs` | constant |'), /Invalid related symbol:/],
+  ['missing file backticks', relatedTable('| `cache` | src/cache.mjs | constant |'), /Invalid related symbol file:/],
+  ['extra column', relatedTable('| `cache` | `src/cache.mjs` | constant | note |'), /three columns/],
+  ['description line', `${relatedTable()}\nDescription.`, /three columns/],
+  ['unknown type', relatedTable(relatedRow('cache', 'src/cache.mjs', 'unknown')), /Invalid related symbol type/],
+  ['uppercase type', relatedTable(relatedRow('cache', 'src/cache.mjs', 'Constant')), /Invalid related symbol type/],
+  ['duplicate reference', relatedTable(`${relatedRow()}\n${relatedRow('cache', 'src/cache.mjs', 'variable')}`), /Duplicate related symbol/],
+  ['missing file', relatedTable(relatedRow('cache', 'src/missing.mjs')), /Source file does not exist with exact case/],
+  ['wrong filename case', relatedTable(relatedRow('cache', 'src/Cache.mjs')), /Source file does not exist with exact case/],
+  ['wrong directory case', relatedTable(relatedRow('cache', 'Src/cache.mjs')), /Source file does not exist with exact case/],
+  ['directory', relatedTable(relatedRow('cache', 'src')), /Source file does not exist with exact case/],
 ]) {
   test(`rejects ${name} in Related Symbols through all entry points`, t => {
     const repo = fixture(t);
@@ -444,6 +498,26 @@ test('rejects repeated Related Symbols sections', t => {
   status(repo.hook(), 1);
   auditResult(repo.audit(), 1, 1);
 });
+
+for (const [name, change, error] of [
+  ['missing catalog', null, /references\/types\.md does not exist/],
+  ['missing language section', text => text.replace('## Go', '## Golang'), /requires one Go section/],
+  ['invalid table header', text => text.replace('| Type | Use for |', '| Kind | Use for |'), /must start with the table header/],
+  ['duplicate type', text => text.replace('| `class` | A class declaration. |',
+    '| `class` | A class declaration. |\n| `class` | Repeated. |'), /repeats symbol type: class/],
+]) {
+  test(`rejects ${name} in the symbol type catalog`, t => {
+    const repo = fixture(t);
+    const path = join(repo.repo, 'create-adr-md/references/types.md');
+    if (change === null) rmSync(path);
+    else repo.write('create-adr-md/references/types.md', change(readFileSync(path, 'utf8')));
+    repo.write(adrPath, relatedDocument([repo.implementation]));
+    const result = repo.validate();
+    status(result, 1);
+    assert.match(result.stderr, error);
+    assert.match(result.stderr, /Invalid symbol type catalog/);
+  });
+}
 
 for (const objectFormat of ['sha1', 'sha256']) {
   test(`${objectFormat} checks source files at the requested revision`, t => {

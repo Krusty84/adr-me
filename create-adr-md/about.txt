@@ -20,6 +20,7 @@ The target repository must contain these files.
 .github/workflows/adr-check.yml
 create-adr-md/scripts/validate-adr.mjs
 create-adr-md/templates/adr.md
+create-adr-md/references/types.md
 ```
 
 Run these commands in the target repository on each developer computer.
@@ -101,9 +102,9 @@ node --test create-adr-md/tests/*.test.mjs
 ## Important details
 
 - The audit scans the **last 30 non-merge commits**, including earlier pushes, for changes in `CODE_PATHS` without links from valid ADRs. Each unlinked code commit produces a warning with its full SHA and URL. Change `ADR_SCAN_LIMIT` in `.github/workflows/adr-check.yml` if needed (1–500).
-- Every `.md` file under `docs/adr/` must use the new template and the path `docs/adr/NNNN-lowercase-slug.md`. References are URL bullets in `## Implementation Commit`.
+- Every `.md` file under `docs/adr/` must use the new template and the path `docs/adr/NNNN-lowercase-slug.md`. Commit references are URL bullets in `## Implementation Commit`. Source symbols use the optional table in `## Related Symbols`; allowed types come from `create-adr-md/references/types.md`.
 - Store each ADR as a regular file. Give all four metadata attributes non-empty values.
-- The skill requires a title of at most 120 characters and a 350-word prose budget across the title, Context, Decision, Rationale, Alternatives, Consequences, and Implementation. Review language and length manually. The validator checks structure, literal unfilled template fields, and commit links.
+- The skill requires a title of at most 120 characters and a 350-word prose budget across the title, Context, Decision, Rationale, Alternatives, Consequences, and Implementation. Review language and length manually. The validator checks structure, literal unfilled template fields, commit links, and the `Related Symbols` table.
 - The scripts validate a temporary copy of `docs/adr/` from the checked commit. The validator uses the source repository's Git objects and remote settings. It checks content and duplicate IDs against that committed tree. Local file and index changes do not affect validation.
 - `Agent-Session` and `Retrospective` ADRs can reference earlier commits already in `main`. Each reference must precede the commit that last changed the ADR. Links added during later edits are valid on the same terms.
 - An ADR can be committed or updated later. The next audit omits its valid linked commits from warnings. Old Actions run summaries are immutable.
@@ -118,5 +119,6 @@ node --test create-adr-md/tests/*.test.mjs
 - `.githooks/pre-push` runs the blocking hook.
 - `.github/scripts/check-adr.mjs` checks the push.
 - `create-adr-md/scripts/validate-adr.mjs` provides CLI and committed-tree validation.
+- `create-adr-md/references/types.md` defines source symbol types by language.
 - `.github/workflows/adr-check.yml` runs the GitHub Actions audit.
 - `.github/scripts/audit-adr.mjs` audits ADRs and defines the code paths for commit warnings.

@@ -13,6 +13,7 @@ Record an Architecture Decision Record (ADR) and link it to its implementation c
 
 - Template: `templates/adr.md` (relative to this `SKILL.md`).
 - Validator: `scripts/validate-adr.mjs` (relative to this `SKILL.md`).
+- Symbol types: `references/types.md` (relative to this `SKILL.md`).
 - ADR output: `<repository>/docs/adr/NNNN-short-title.md`.
 
 Use the template without adding, deleting, renaming, or reordering its attributes or sections. Replace all placeholders. Do not edit the template to create an ADR.
@@ -90,30 +91,38 @@ Do not add `Verified At` or `Scope` yet: these are reserved for a future ADR fre
 
 ## Source symbol links
 
-Use the optional heading `## Related Symbols` at most once, after the metadata and at any position among the standard sections. When creating an ADR, put it before `Implementation Commit`. Omit it if no symbol links are confirmed. An absent or empty section is valid. Existing ADRs need no migration. This section is outside the existing prose word limit.
+Use the heading `## Related Symbols` at most once, after the metadata and at any position among the standard sections. When creating an ADR, put it before `Implementation Commit`. Omit it if no symbol links are confirmed. An absent or empty section is valid. ADRs without this section need no migration. Convert list-based symbol links to the table. This section is outside the existing prose word limit.
 
-- Link functions, methods, classes, interfaces, variables, constants, and properties that implement the decision. Read the source to verify each declaration, its qualified name, and its relevance. Do not infer a link from a name alone.
-- Put one identifier in inline code on each Markdown list item: `relative/path#QualifiedName`. Use repository-relative paths, `/` separators, and exact path and symbol case. Each path must identify an existing regular file. Do not use absolute paths, `.` or `..` path segments, call parentheses, or source line numbers.
-- An English description is optional. Put it after the identifier or on indented continuation lines. Do not repeat an identifier within one ADR.
-- One ADR can link several symbols. Several ADRs can link the same symbol. Update affected links after a file move or symbol rename.
-- Local variables, parameters, and overloaded methods need a separate disambiguation rule. Until that rule exists, use prose mentions for them.
+- Read the source to verify each declaration, qualified name, type, and relevance. Do not infer a link from a name alone.
+- Use exactly the columns `Symbol`, `File`, and `Type`. Put `Symbol` and `File` in inline code. Use one declaration per row and no description column.
+- Use a repository-relative file path, `/` separators, and exact path and symbol case. The path must identify an existing regular file. Do not use absolute paths, `.` or `..` path segments, call parentheses, or source line numbers. Preserve parentheses only when they are part of an operator name such as `operator()`.
+- Do not repeat the same `File` and `Symbol` pair within one ADR. One ADR can link several symbols. Several ADRs can link the same symbol.
+- Update affected rows after a file move or symbol rename. Local variables, parameters, generic parameters, overloaded declarations, extensions, and Rust `impl` blocks need a separate disambiguation rule. Use prose mentions for them.
 
 ```markdown
 ## Related Symbols
 
-- `src/pressure/Service.ts#PressureService.calculate` — pressure calculation.
-- `src/pressure/Service.ts#PressureService.flowRate`
-  — input flow rate.
-- `src/pressure/limits.ts#MAX_PRESSURE` — pressure limit.
+| Symbol                      | File                      | Type     |
+| --------------------------- | ------------------------- | -------- |
+| `PressureService.calculate` | `src/pressure/Service.ts` | method   |
+| `PressureService.flowRate`  | `src/pressure/Service.ts` | property |
+| `MAX_PRESSURE`              | `src/pressure/limits.ts`  | constant |
 ```
 
+### Type routing
+
+Determine the language from the file extension, source syntax, and build configuration. Read only the matching section of `references/types.md`. For a mixed-language ADR, read each matching section.
+
+- `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, or `.cjs`: [TypeScript and JavaScript](references/types.md#typescript-and-javascript).
+- `.c`, `.h`, `.cc`, `.cpp`, `.cxx`, `.c++`, `.hh`, `.hpp`, `.hxx`, `.h++`, `.ipp`, `.inl`, `.tpp`, `.ixx`, or `.cppm`: [C and C++](references/types.md#c-and-c).
+- `.swift` or `.swiftinterface`: [Swift](references/types.md#swift).
+- `.py`, `.pyi`, or `.pyw`: [Python](references/types.md#python).
+- `.rs`: [Rust](references/types.md#rust).
+- `.go`: [Go](references/types.md#go).
+
+Use source syntax and build configuration when an extension is absent or ambiguous. Do not add a row for another language until `references/types.md` contains a section for it. Select `Type` only from the relevant language section.
+
 In other sections, use inline code for source names, such as `PressureService.calculate()` or `MAX_PRESSURE`. Preserve source names; include the class name for methods where possible. Call parentheses are allowed in prose. These mentions supply search candidates. A name without a path is ambiguous when declarations share that name. Exact links in `Related Symbols` take priority over inferred matches.
-
-### IDE consumer contract
-
-Future IDE integration must show valid links through CodeLens or Hover, display ADR IDs such as `ADR-0012`, and open the selected ADR. Where possible, open its reference line. Refresh links after ADR or source changes. Keep ADRs without this section available for full-text search. Link errors must not prevent opening or editing an ADR.
-
-The validator checks link syntax, duplicates, and source files. The agent verifies declarations. Automatic missing-symbol and ambiguity diagnostics need a language-aware resolver; that resolver and the VS Code extension are separate work.
 
 ## Validation (mandatory)
 
@@ -145,14 +154,14 @@ The validator checks:
 - HTTPS implementation commit URLs.
 - Git remote identity.
 - Existence of local implementation commits.
-- Source link syntax, duplicate identifiers, and source files with exact path case.
+- Related-symbol table syntax, allowed types, duplicate file-symbol pairs, and source files with exact path case.
 
 ### Completion Requirements
 
 1. Run validation after each ADR change.
 2. Correct all errors.
 3. Repeat validation until it passes.
-4. Review factual accuracy, linked declarations, ambiguity, and ASD-STE100 compliance.
+4. Review factual accuracy, linked declarations, language-specific types, ambiguity, and ASD-STE100 compliance.
 5. Verify implementation commit URLs.
 6. Do not commit an invalid ADR.
 

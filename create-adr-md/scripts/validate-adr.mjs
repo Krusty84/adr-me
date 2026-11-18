@@ -33,6 +33,14 @@ const SECTIONS = [
   "Implementation Commit",
 ];
 const RELATED_SYMBOLS = "Related Symbols";
+const TYPE_CATALOG_SECTIONS = [
+  "TypeScript and JavaScript",
+  "C and C++",
+  "Swift",
+  "Python",
+  "Rust",
+  "Go",
+];
 const ATTRIBUTES = ["Status", "Date", "Record Type", "Evidence"];
 const VALUES = {
   Status: ["Accepted"],
@@ -185,6 +193,73 @@ function readSections(lines) {
   ]));
   return { visible, headers, bodies };
 }
+function parseTableRow(line) {
+  const value = line.trim();
+  if (!value.startsWith("|") || !value.endsWith("|")) return null;
+  const cells = [];
+  let cell = "";
+  for (let i = 1; i < value.length - 1; i++) {
+    if (value[i] === "\\" && value[i + 1] === "|") {
+      cell += "|";
+      i++;
+    } else if (value[i] === "|") {
+      cells.push(cell.trim());
+      cell = "";
+    } else cell += value[i];
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+function isTableSeparator(cells, count) {
+  return cells?.length === count &&
+    cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+function loadSymbolTypes() {
+  const catalog = fileURLToPath(
+    new URL("../references/types.md", import.meta.url),
+  );
+  if (!existsSync(catalog))
+    throw Error("references/types.md does not exist");
+  const text = readFileSync(catalog, "utf8");
+  if (text.includes("\r"))
+    throw Error("references/types.md must use LF line endings");
+  const lines = text.replace(/\n$/, "").split("\n");
+  const { headers, bodies } = readSections(lines);
+  const sectionTitles = new Set();
+  for (const { title } of headers) {
+    if (sectionTitles.has(title))
+      throw Error(`references/types.md repeats section: ${title}`);
+    sectionTitles.add(title);
+  }
+  for (const title of TYPE_CATALOG_SECTIONS) {
+    if (headers.filter((header) => header.title === title).length !== 1)
+      throw Error(`references/types.md requires one ${title} section`);
+  }
+  const types = new Set();
+  for (const { title } of headers) {
+    const table = (bodies.get(title) ?? "").split("\n")
+      .filter((line) => line.trim());
+    const heading = parseTableRow(table[0] ?? "");
+    if (heading?.length !== 2 || heading[0] !== "Type" || heading[1] !== "Use for")
+      throw Error(`${title} must start with the table header: | Type | Use for |`);
+    if (!isTableSeparator(parseTableRow(table[1] ?? ""), 2))
+      throw Error(`${title} requires a two-column Markdown table separator`);
+    if (table.length < 3)
+      throw Error(`${title} requires at least one symbol type`);
+    const sectionTypes = new Set();
+    for (const line of table.slice(2)) {
+      const row = parseTableRow(line);
+      const match = row?.[0]?.match(/^`([a-z]+(?:-[a-z]+)*)`$/);
+      if (row?.length !== 2 || !match || !row[1])
+        throw Error(`${title} has an invalid type row: ${line.trim()}`);
+      if (sectionTypes.has(match[1]))
+        throw Error(`${title} repeats symbol type: ${match[1]}`);
+      sectionTypes.add(match[1]);
+      types.add(match[1]);
+    }
+  }
+  return types;
+}
 function sourceFileExists(root, path, revision) {
   if (revision) {
     const entries = gitInRepo(root, "--literal-pathspecs", "ls-tree", "-z", revision, "--", path);
@@ -203,47 +278,62 @@ function sourceFileExists(root, path, revision) {
   }
   return lstatSync(target, { throwIfNoEntry: false })?.isFile() ?? false;
 }
-function validateRelatedSymbols(body, root, revision) {
+function validateRelatedSymbols(body, root, revision, allowedTypes) {
   if (isPlaceholder(body ?? "")) {
     fail("Related Symbols contains a placeholder");
     return;
   }
+  const lines = outsideFences((body ?? "").split("\n"))
+    .filter((line) => line.trim());
+  if (lines.length === 0) return;
+  const heading = parseTableRow(lines[0]);
+  if (
+    heading?.length !== 3 ||
+    heading[0] !== "Symbol" || heading[1] !== "File" || heading[2] !== "Type"
+  ) {
+    fail("Related Symbols must start with the table header: | Symbol | File | Type |");
+    return;
+  }
+  if (!isTableSeparator(parseTableRow(lines[1] ?? ""), 3)) {
+    fail("Related Symbols requires a three-column Markdown table separator");
+    return;
+  }
   const seen = new Set();
-  let descriptionIndent = null;
-  for (const line of outsideFences((body ?? "").split("\n"))) {
-    if (!line.trim()) continue;
-    const item = line.match(/^( {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+)(.*)$/);
-    const identifiers = line.match(/`[^`#]+#[^`#]+`/g) ?? [];
-    if (identifiers.length > (item ? 1 : 0)) {
-      fail("Each Related Symbols entry must be a list item with one inline-code identifier");
+  for (const line of lines.slice(2)) {
+    const row = parseTableRow(line);
+    if (row?.length !== 3) {
+      fail(`Each Related Symbols row must have three columns: ${line.trim()}`);
       continue;
     }
-    if (!item) {
-      if (descriptionIndent !== null &&
-        line.match(/^\s*/)[0].replace(/\t/g, "    ").length >= descriptionIndent)
-        continue;
-      fail("Each Related Symbols entry must be a list item with one inline-code identifier");
-      continue;
-    }
-    descriptionIndent = item[1].replace(/\t/g, "    ").length;
-    const code = item[2].match(/^`([^`]+)`(?:[ \t]+.*)?$/);
-    if (!code) {
-      fail("Each Related Symbols entry must be a list item with one inline-code identifier");
-      continue;
-    }
-    const identifier = code[1];
-    const match = identifier.match(/^([^#]+)#([^\s#()`/\\]+)$/u);
-    const path = match?.[1];
+    const symbolMatch = row[0].match(/^`([^`]+)`$/);
+    const pathMatch = row[1].match(/^`([^`]+)`$/);
+    const symbol = symbolMatch?.[1];
+    const path = pathMatch?.[1];
+    const invalidParentheses = /[()]/.test(symbol ?? "") &&
+      !/(?:^|[.:])operator\(\)$/.test(symbol ?? "");
     if (
-      !match || /[\\\x00-\x1f]/.test(path) || /^[a-z]:/i.test(path) ||
-      path.split("/").some((part) => !part || part === "." || part === "..") ||
-      /:\d+(?::\d+)?$/.test(path) || /:\d+(?::\d+)?$/.test(match[2])
+      !symbolMatch || /[\s`\\]/u.test(symbol) || invalidParentheses ||
+      /:\d+(?::\d+)?$/.test(symbol)
     ) {
-      fail(`Invalid related symbol identifier: ${identifier}`);
+      fail(`Invalid related symbol: ${row[0]}`);
       continue;
     }
-    if (seen.has(identifier)) fail(`Duplicate related symbol: ${identifier}`);
-    seen.add(identifier);
+    if (
+      !pathMatch || /[\\\x00-\x1f]/.test(path) || /^[a-z]:/i.test(path) ||
+      path.split("/").some((part) => !part || part === "." || part === "..") ||
+      /:\d+(?::\d+)?$/.test(path)
+    ) {
+      fail(`Invalid related symbol file: ${row[1]}`);
+      continue;
+    }
+    const type = row[2];
+    if (!/^[a-z]+(?:-[a-z]+)*$/.test(type) || !allowedTypes.has(type)) {
+      fail(`Invalid related symbol type: ${type}`);
+      continue;
+    }
+    const key = `${path}\0${symbol}`;
+    if (seen.has(key)) fail(`Duplicate related symbol: ${path}#${symbol}`);
+    seen.add(key);
     if (!sourceFileExists(root, path, revision))
       fail(`Source file does not exist with exact case: ${path}`);
   }
@@ -270,6 +360,14 @@ function main() {
     return;
   }
   const root = realpathSync(repo);
+  let allowedSymbolTypes;
+  try {
+    allowedSymbolTypes = loadSymbolTypes();
+  } catch (err) {
+    fail(`Invalid symbol type catalog: ${err.message}`);
+    finish();
+    return;
+  }
   if (opts.sourceRevision &&
     gitInRepo(root, "cat-file", "-t", opts.sourceRevision) !== "commit") {
     fail(`Source revision is not a local commit: ${opts.sourceRevision}`);
@@ -384,7 +482,12 @@ function main() {
       fail(`${section} must contain verified facts, not "Not recorded."`);
     }
   }
-  validateRelatedSymbols(bodies.get(RELATED_SYMBOLS), root, opts.sourceRevision);
+  validateRelatedSymbols(
+    bodies.get(RELATED_SYMBOLS),
+    root,
+    opts.sourceRevision,
+    allowedSymbolTypes,
+  );
 
   const remoteUrl = gitInRepo(root, "remote", "get-url", opts.remote);
   if (!remoteUrl) fail(`Git remote ${opts.remote} does not exist`);

@@ -31,7 +31,9 @@
 
 ## Related Symbols
 
-- `<repository-relative-path#QualifiedName>` — <Optional English description. Delete this section when no links are confirmed.>
+| Symbol | File | Type |
+|---|---|---|
+| `<QualifiedName>` | `<repository-relative-path>` | <type-from-types.md> |
 
 ## Implementation Commit
 
