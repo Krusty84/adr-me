@@ -29,6 +29,10 @@
 
 <Verified implementation facts.>
 
+## Related Symbols
+
+- `<repository-relative-path#QualifiedName>` — <Optional English description. Delete this section when no links are confirmed.>
+
 ## Implementation Commit
 
 - https://github.com/OWNER/REPO/commit/<FULL_COMMIT_SHA>

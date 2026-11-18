@@ -9,6 +9,9 @@ import { fileURLToPath } from 'node:url';
 const source = fileURLToPath(new URL('../../', import.meta.url));
 const adrPath = 'docs/adr/0001-cache.md';
 const template = readFileSync(join(source, 'create-adr-md/templates/adr.md'), 'utf8');
+const relatedSymbolsTemplate = '## Related Symbols\n\n' +
+  '- `<repository-relative-path#QualifiedName>` — ' +
+  '<Optional English description. Delete this section when no links are confirmed.>\n\n';
 
 function document(links, recordType = 'Agent-Session') {
   return template
@@ -22,6 +25,7 @@ function document(links, recordType = 'Agent-Session') {
     .replace('<Rejected alternatives and reasons, or "Not recorded.">', 'Not recorded.')
     .replace('<Known effects and risks, or "Not recorded.">', 'Not recorded.')
     .replace('<Verified implementation facts.>', 'Cache stores one value.')
+    .replace(relatedSymbolsTemplate, '')
     .replace('- https://github.com/OWNER/REPO/commit/<FULL_COMMIT_SHA>', links
       .map(sha => `- https://github.com/example/adr-policy/commit/${sha}`).join('\n'));
 }

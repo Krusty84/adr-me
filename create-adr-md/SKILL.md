@@ -27,11 +27,11 @@ Use the template without adding, deleting, renaming, or reordering its attribute
 - State verifiable facts. Do not invent the task, intent, reasons, alternatives, risks, or outcomes.
 - Use `Not recorded.` for a missing _Context_, _Rationale_, _Alternatives_, or _Consequences_ item. Do not invent evidence to complete a section.
 - The _Decision_ and _Implementation_ sections must contain supported facts. If the decision cannot be identified, stop and request human input.
-- Review English, length limits, and ASD-STE100 separately. The validator checks structure and commit links.
+- Review English, length limits, and ASD-STE100 separately. The validator checks structure, commit links, and source file paths.
 
 ## Fixed document contract
 
-Use exactly the heading and attribute order in `templates/adr.md`:
+Use the required heading and attribute order in `templates/adr.md`:
 
 1. `# ADR-NNNN: Title`
 2. `**Status:** Accepted`
@@ -44,7 +44,8 @@ Use exactly the heading and attribute order in `templates/adr.md`:
 9. `## Alternatives`
 10. `## Consequences`
 11. `## Implementation`
-12. `## Implementation Commit`
+12. `## Related Symbols`
+13. `## Implementation Commit`
 
 The `Date` is the ADR creation date, not the implementation date. `Status: Accepted` means the user approved the **documented decision now**; it does not claim that a historical ADR existed.
 
@@ -87,6 +88,33 @@ Do not add `Verified At` or `Scope` yet: these are reserved for a future ADR fre
 - If the remote is missing, the web URL is unknown, or a commit cannot be verified, stop before committing the ADR. Ask the user for a verifiable repository URL or correct Git history.
 - Rebase, amend, and cherry-pick can change SHAs. After such operations, rerun validation and update affected ADR URLs in a **new** commit. A local object check does not prove that a URL is reachable on the server.
 
+## Source symbol links
+
+Use the optional heading `## Related Symbols` at most once, after the metadata and at any position among the standard sections. When creating an ADR, put it before `Implementation Commit`. Omit it if no symbol links are confirmed. An absent or empty section is valid. Existing ADRs need no migration. This section is outside the existing prose word limit.
+
+- Link functions, methods, classes, interfaces, variables, constants, and properties that implement the decision. Read the source to verify each declaration, its qualified name, and its relevance. Do not infer a link from a name alone.
+- Put one identifier in inline code on each Markdown list item: `relative/path#QualifiedName`. Use repository-relative paths, `/` separators, and exact path and symbol case. Each path must identify an existing regular file. Do not use absolute paths, `.` or `..` path segments, call parentheses, or source line numbers.
+- An English description is optional. Put it after the identifier or on indented continuation lines. Do not repeat an identifier within one ADR.
+- One ADR can link several symbols. Several ADRs can link the same symbol. Update affected links after a file move or symbol rename.
+- Local variables, parameters, and overloaded methods need a separate disambiguation rule. Until that rule exists, use prose mentions for them.
+
+```markdown
+## Related Symbols
+
+- `src/pressure/Service.ts#PressureService.calculate` — pressure calculation.
+- `src/pressure/Service.ts#PressureService.flowRate`
+  — input flow rate.
+- `src/pressure/limits.ts#MAX_PRESSURE` — pressure limit.
+```
+
+In other sections, use inline code for source names, such as `PressureService.calculate()` or `MAX_PRESSURE`. Preserve source names; include the class name for methods where possible. Call parentheses are allowed in prose. These mentions supply search candidates. A name without a path is ambiguous when declarations share that name. Exact links in `Related Symbols` take priority over inferred matches.
+
+### IDE consumer contract
+
+Future IDE integration must show valid links through CodeLens or Hover, display ADR IDs such as `ADR-0012`, and open the selected ADR. Where possible, open its reference line. Refresh links after ADR or source changes. Keep ADRs without this section available for full-text search. Link errors must not prevent opening or editing an ADR.
+
+The validator checks link syntax, duplicates, and source files. The agent verifies declarations. Automatic missing-symbol and ambiguity diagnostics need a language-aware resolver; that resolver and the VS Code extension are separate work.
+
 ## Validation (mandatory)
 
 The validator is part of this skill:
@@ -111,23 +139,24 @@ The validator checks:
 
 - ADR path, filename, and ID.
 - Required attributes and allowed values.
-- Exact section structure and order.
+- Required section structure and order, with at most one optional `Related Symbols` section.
 - Required content and valid dates.
 - Unfilled fields from the bundled template.
 - HTTPS implementation commit URLs.
 - Git remote identity.
 - Existence of local implementation commits.
+- Source link syntax, duplicate identifiers, and source files with exact path case.
 
 ### Completion Requirements
 
 1. Run validation after each ADR change.
 2. Correct all errors.
 3. Repeat validation until it passes.
-4. Review factual accuracy and ASD-STE100 compliance.
+4. Review factual accuracy, linked declarations, ambiguity, and ASD-STE100 compliance.
 5. Verify implementation commit URLs.
 6. Do not commit an invalid ADR.
 
-The validator cannot prove factual accuracy,
+The validator cannot prove factual accuracy, symbol existence or unique resolution,
 full ASD-STE100 compliance, or URL reachability.
 
 Run the **same validator** in a pre-commit hook and CI to enforce the contract outside the agent. Do not treat a successful validation as user approval.

@@ -10,8 +10,13 @@ const packagePath = fileURLToPath(new URL('../', import.meta.url));
 const source = fileURLToPath(new URL('../../', import.meta.url));
 const template = readFileSync(join(packagePath, 'templates', 'adr.md'), 'utf8');
 const adrPath = 'docs/adr/0001-cache.md';
+const relatedSymbolsTemplate = '## Related Symbols\n\n' +
+  '- `<repository-relative-path#QualifiedName>` — ' +
+  '<Optional English description. Delete this section when no links are confirmed.>\n\n';
 
-function document(links, { recordType = 'Agent-Session', title = 'Cache', context = 'Not recorded.' } = {}) {
+function document(links, {
+  recordType = 'Agent-Session', title = 'Cache', context = 'Not recorded.', relatedSymbols = null,
+} = {}) {
   return template
     .replace('<Short decision title>', title)
     .replace('YYYY-MM-DD', '2026-11-17')
@@ -23,8 +28,19 @@ function document(links, { recordType = 'Agent-Session', title = 'Cache', contex
     .replace('<Rejected alternatives and reasons, or "Not recorded.">', 'Not recorded.')
     .replace('<Known effects and risks, or "Not recorded.">', 'Not recorded.')
     .replace('<Verified implementation facts.>', 'Cache stores one value.')
+    .replace(relatedSymbolsTemplate, relatedSymbols === null ? '' :
+      `## Related Symbols\n\n${relatedSymbols}\n\n`)
     .replace('- https://github.com/OWNER/REPO/commit/<FULL_COMMIT_SHA>', links
       .map(sha => `- https://github.com/example/adr-tests/commit/${sha}`).join('\n'));
+}
+
+function relatedDocument(links, body = '- `src/cache.mjs#cache`', before = 'Implementation Commit') {
+  const text = document(links, { relatedSymbols: body });
+  const section = `## Related Symbols\n\n${body}\n\n`;
+  if (before === 'Implementation Commit') return text;
+  const withoutSection = text.replace(section, '');
+  return before ? withoutSection.replace(`## ${before}\n`, `${section}## ${before}\n`) :
+    `${withoutSection}\n${section}`;
 }
 
 function fixture(t, objectFormat = 'sha1') {
@@ -81,8 +97,9 @@ function fixture(t, objectFormat = 'sha1') {
     return commit();
   };
   const implementation = code();
-  const validate = (path = adrPath) => run(process.execPath, [
+  const validate = (path = adrPath, args = []) => run(process.execPath, [
     'create-adr-md/scripts/validate-adr.mjs', path, '--repo', '.', '--remote', 'origin',
+    ...args,
   ]);
   const hook = (before = base) => {
     const result = run(join(repo, '.githooks/pre-push'), ['origin'], {
@@ -319,4 +336,163 @@ test('the installation guide example works with a real local push', t => {
   repo.code();
   status(repo.run('git', ['push', '-q', 'origin', 'main']), 0);
   auditResult(repo.audit(), 1, 0);
+});
+
+for (const before of ['Context', 'Decision', 'Rationale', 'Alternatives', 'Consequences',
+  'Implementation', 'Implementation Commit', null]) {
+  test(`accepts Related Symbols ${before ? `before ${before}` : 'at the end'} through all entry points`, t => {
+    const repo = fixture(t);
+    repo.write(adrPath, relatedDocument([repo.implementation], undefined, before));
+    repo.commit();
+    status(repo.validate(), 0);
+    status(repo.hook(), 0);
+    auditResult(repo.audit(), 0, 0);
+  });
+}
+
+test('accepts an empty Related Symbols section', t => {
+  const repo = fixture(t);
+  repo.write(adrPath, relatedDocument([repo.implementation], ''));
+  repo.commit();
+  status(repo.validate(), 0);
+  status(repo.hook(), 0);
+  auditResult(repo.audit(), 0, 0);
+});
+
+test('accepts symbol kinds, Markdown lists, and descriptions', t => {
+  const repo = fixture(t);
+  const path = 'src/[pressure]/Pressure Service.ts';
+  repo.write(path, 'export interface Calculator { calculate(): number; }\n' +
+    'export class PressureService { flowRate = 0; calculate() { return this.flowRate; } }\n' +
+    'export function validatePressure() {}\nexport let pressure = 0;\nexport let Pressure = 0;\n' +
+    'export const MAX_PRESSURE = 10;\n');
+  const implementation = repo.commit();
+  const symbols = ['Calculator', 'PressureService', 'PressureService.flowRate',
+    'PressureService.calculate', 'validatePressure', 'pressure', 'Pressure', 'MAX_PRESSURE'];
+  const markers = ['-', '*', '+', '1.', '2)'];
+  const body = symbols.map((name, index) =>
+    `${markers[index % markers.length]} \`${path}#${name}\` — verified symbol.\n   Used by the decision.`).join('\n\n');
+  repo.write(adrPath, relatedDocument([repo.implementation, implementation], body));
+  repo.commit();
+  status(repo.validate(), 0);
+  status(repo.hook(), 0);
+  auditResult(repo.audit(), 0, 0);
+});
+
+for (const marker of ['```', '~~~~']) {
+  test(`ignores fenced examples (${marker}) and prose mentions as exact links`, t => {
+    const repo = fixture(t);
+    const body = '- `src/cache.mjs#cache`\n\n' +
+      `${marker}markdown\n## Related Symbols\n- \`missing.ts#Missing\`\n${marker}\n`;
+    const text = relatedDocument([repo.implementation], body).replace('Not recorded.',
+      `Call \`cache.get()\` and read \`missingSymbol\`.\n\n${marker}markdown\n` +
+      '## Related Symbols\n- `missing.ts#Missing`\n## Implementation Commit\n' +
+      '- https://github.com/example/adr-tests/commit/ffffffffffffffffffffffffffffffffffffffff\n' +
+      `### Example heading\n${marker}\n`);
+    repo.write(adrPath, text);
+    repo.commit();
+    status(repo.validate(), 0);
+    status(repo.hook(), 0);
+    auditResult(repo.audit(), 0, 0);
+  });
+}
+
+for (const identifier of [
+  'src/cache.mjs:cache', '#cache', 'src/cache.mjs#', 'src/cache.mjs#cache#extra',
+  'src/cache.mjs#cache()', 'src/cache.mjs#cache value', 'src\\cache.mjs#cache',
+  '/src/cache.mjs#cache', 'C:/src/cache.mjs#cache', '../src/cache.mjs#cache',
+  './src/cache.mjs#cache', 'src//cache.mjs#cache', 'src/cache.mjs:12#cache',
+  'src/cache.mjs#cache:12',
+]) {
+  test(`rejects malformed related symbol ${identifier}`, t => {
+    const repo = fixture(t);
+    repo.write(adrPath, relatedDocument([repo.implementation], `- \`${identifier}\``));
+    const result = repo.validate();
+    status(result, 1);
+    assert.match(result.stderr, /Invalid related symbol identifier/);
+  });
+}
+
+for (const [name, body, error] of [
+  ['missing backticks', '- src/cache.mjs#cache', /Each Related Symbols entry/],
+  ['unlisted entry', '`src/cache.mjs#cache`', /Each Related Symbols entry/],
+  ['two identifiers in one item', '- `src/cache.mjs#cache` and `src/cache.mjs#other`', /Each Related Symbols entry/],
+  ['identifier in a description', '- `src/cache.mjs#cache`\n  `src/cache.mjs#other`', /Each Related Symbols entry/],
+  ['duplicate reference', '- `src/cache.mjs#cache`\n- `src/cache.mjs#cache` — repeated.', /Duplicate related symbol/],
+  ['missing file', '- `src/missing.mjs#cache`', /Source file does not exist with exact case/],
+  ['wrong filename case', '- `src/Cache.mjs#cache`', /Source file does not exist with exact case/],
+  ['wrong directory case', '- `Src/cache.mjs#cache`', /Source file does not exist with exact case/],
+  ['directory', '- `src#cache`', /Source file does not exist with exact case/],
+]) {
+  test(`rejects ${name} in Related Symbols through all entry points`, t => {
+    const repo = fixture(t);
+    repo.write(adrPath, relatedDocument([repo.implementation], body));
+    repo.commit();
+    const result = repo.validate();
+    status(result, 1);
+    assert.match(result.stderr, error);
+    status(repo.hook(), 1);
+    auditResult(repo.audit(), 1, 1);
+  });
+}
+
+test('rejects repeated Related Symbols sections', t => {
+  const repo = fixture(t);
+  repo.write(adrPath, relatedDocument([repo.implementation]) + '\n## Related Symbols\n');
+  repo.commit();
+  status(repo.validate(), 1);
+  status(repo.hook(), 1);
+  auditResult(repo.audit(), 1, 1);
+});
+
+for (const objectFormat of ['sha1', 'sha256']) {
+  test(`${objectFormat} checks source files at the requested revision`, t => {
+    const repo = fixture(t, objectFormat);
+    repo.write(adrPath, relatedDocument([repo.implementation]));
+    repo.commit();
+    rmSync(join(repo.repo, 'src/cache.mjs'));
+    status(repo.validate(), 1);
+    status(repo.validate(adrPath, ['--source-revision', repo.implementation]), 0);
+    status(repo.hook(), 0);
+    auditResult(repo.audit(), 0, 0);
+    const result = repo.validate(adrPath, ['--source-revision', repo.base]);
+    status(result, 1);
+    assert.match(result.stderr, /Source file does not exist with exact case/);
+  });
+}
+
+test('committed source deletion is not hidden by an untracked file', t => {
+  const repo = fixture(t);
+  repo.write(adrPath, relatedDocument([repo.implementation]));
+  rmSync(join(repo.repo, 'src/cache.mjs'));
+  repo.commit();
+  repo.write('src/cache.mjs', 'export const cache = new Map();\n');
+  status(repo.validate(), 0);
+  status(repo.hook(), 1);
+  auditResult(repo.audit(), 2, 1);
+});
+
+test('multiple ADRs can reference the same symbol', t => {
+  const repo = fixture(t);
+  const text = relatedDocument([repo.implementation]);
+  repo.write(adrPath, text);
+  repo.write('docs/adr/0002-other-cache.md', text.replace('ADR-0001:', 'ADR-0002:'));
+  repo.commit();
+  status(repo.validate(), 0);
+  status(repo.hook(), 0);
+  auditResult(repo.audit(), 0, 0);
+});
+
+test('source revision requires a full local commit SHA', t => {
+  const repo = fixture(t);
+  repo.write(adrPath, relatedDocument([repo.implementation]));
+  for (const args of [['--source-revision'], ['--source-revision', ''], ['--source-revision', 'HEAD'],
+    ['--source-revision', repo.implementation.slice(0, 12)]]) {
+    status(repo.validate(adrPath, args), 2);
+  }
+  for (const revision of ['f'.repeat(repo.implementation.length), repo.git('rev-parse', 'HEAD^{tree}')]) {
+    const result = repo.validate(adrPath, ['--source-revision', revision]);
+    status(result, 1);
+    assert.match(result.stderr, /Source revision is not a local commit/);
+  }
 });

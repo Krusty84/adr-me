@@ -32,6 +32,7 @@ const SECTIONS = [
   "Implementation",
   "Implementation Commit",
 ];
+const RELATED_SYMBOLS = "Related Symbols";
 const ATTRIBUTES = ["Status", "Date", "Record Type", "Evidence"];
 const VALUES = {
   Status: ["Accepted"],
@@ -50,7 +51,7 @@ function fail(message) {
 }
 function usage() {
   console.log(
-    "Usage: node validate-adr.mjs <docs/adr/NNNN-slug.md> [--repo <path>] [--remote <name>]",
+    "Usage: node validate-adr.mjs <docs/adr/NNNN-slug.md> [--repo <path>] [--remote <name>] [--source-revision <full-SHA>]",
   );
   console.log(
     "Requires a local Git repository and a configured web-accessible Git remote (default: origin).",
@@ -69,24 +70,28 @@ function parseArguments(args) {
   let file = null;
   let repo = null;
   let remote = "origin";
+  let sourceRevision = null;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--help" || arg === "-h") {
       usage();
       process.exit(0);
     }
-    if (arg === "--repo" || arg === "--remote") {
+    if (["--repo", "--remote", "--source-revision"].includes(arg)) {
       if (i + 1 >= args.length) throw Error(`Missing value for ${arg}`);
       const value = args[++i];
       if (arg === "--repo") repo = value;
-      else remote = value;
+      else if (arg === "--remote") remote = value;
+      else sourceRevision = value;
     } else if (arg.startsWith("-")) throw Error(`Unknown option: ${arg}`);
     else if (file !== null) throw Error("Provide exactly one ADR file");
     else file = arg;
   }
   if (!file) throw Error("Missing ADR filename");
   if (!/^[\w.-]+$/.test(remote)) throw Error("Invalid remote name");
-  return { file, repo, remote };
+  if (sourceRevision !== null && !new RegExp(`^${SHA_PATTERN}$`, "i").test(sourceRevision))
+    throw Error("--source-revision requires a full commit SHA");
+  return { file, repo, remote, sourceRevision };
 }
 function normalizeProjectPath(p) {
   return decodeURIComponent(p)
@@ -148,6 +153,102 @@ function isPlaceholder(s) {
   return TEMPLATE_PLACEHOLDERS.some((placeholder) => s.includes(placeholder));
 }
 
+function outsideFences(lines) {
+  let fence = null;
+  return lines.map((line) => {
+    const marker = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (
+        marker && marker[1][0] === fence[0] &&
+        marker[1].length >= fence.length && !marker[2].trim()
+      ) fence = null;
+      return "";
+    }
+    if (marker && (marker[1][0] !== "`" || !marker[2].includes("`"))) {
+      fence = marker[1];
+      return "";
+    }
+    return line;
+  });
+}
+function readSections(lines) {
+  const visible = outsideFences(lines);
+  const headers = [];
+  visible.forEach((line, index) => {
+    if (/^## /.test(line))
+      headers.push({ title: line.slice(3).trim(), line: index });
+  });
+  const bodies = new Map(headers.map((header, index) => [
+    header.title,
+    lines.slice(header.line + 1, headers[index + 1]?.line ?? lines.length)
+      .join("\n").trim(),
+  ]));
+  return { visible, headers, bodies };
+}
+function sourceFileExists(root, path, revision) {
+  if (revision) {
+    const entries = gitInRepo(root, "--literal-pathspecs", "ls-tree", "-z", revision, "--", path);
+    return (entries ?? "").split("\0").some((entry) => {
+      const tab = entry.indexOf("\t");
+      return /^100(?:644|755) blob /.test(entry) && entry.slice(tab + 1) === path;
+    });
+  }
+  let target = root;
+  for (const part of path.split("/")) {
+    if (
+      !lstatSync(target, { throwIfNoEntry: false })?.isDirectory() ||
+      !readdirSync(target).includes(part)
+    ) return false;
+    target = join(target, part);
+  }
+  return lstatSync(target, { throwIfNoEntry: false })?.isFile() ?? false;
+}
+function validateRelatedSymbols(body, root, revision) {
+  if (isPlaceholder(body ?? "")) {
+    fail("Related Symbols contains a placeholder");
+    return;
+  }
+  const seen = new Set();
+  let descriptionIndent = null;
+  for (const line of outsideFences((body ?? "").split("\n"))) {
+    if (!line.trim()) continue;
+    const item = line.match(/^( {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+)(.*)$/);
+    const identifiers = line.match(/`[^`#]+#[^`#]+`/g) ?? [];
+    if (identifiers.length > (item ? 1 : 0)) {
+      fail("Each Related Symbols entry must be a list item with one inline-code identifier");
+      continue;
+    }
+    if (!item) {
+      if (descriptionIndent !== null &&
+        line.match(/^\s*/)[0].replace(/\t/g, "    ").length >= descriptionIndent)
+        continue;
+      fail("Each Related Symbols entry must be a list item with one inline-code identifier");
+      continue;
+    }
+    descriptionIndent = item[1].replace(/\t/g, "    ").length;
+    const code = item[2].match(/^`([^`]+)`(?:[ \t]+.*)?$/);
+    if (!code) {
+      fail("Each Related Symbols entry must be a list item with one inline-code identifier");
+      continue;
+    }
+    const identifier = code[1];
+    const match = identifier.match(/^([^#]+)#([^\s#()`/\\]+)$/u);
+    const path = match?.[1];
+    if (
+      !match || /[\\\x00-\x1f]/.test(path) || /^[a-z]:/i.test(path) ||
+      path.split("/").some((part) => !part || part === "." || part === "..") ||
+      /:\d+(?::\d+)?$/.test(path) || /:\d+(?::\d+)?$/.test(match[2])
+    ) {
+      fail(`Invalid related symbol identifier: ${identifier}`);
+      continue;
+    }
+    if (seen.has(identifier)) fail(`Duplicate related symbol: ${identifier}`);
+    seen.add(identifier);
+    if (!sourceFileExists(root, path, revision))
+      fail(`Source file does not exist with exact case: ${path}`);
+  }
+}
+
 function main() {
   let opts;
   try {
@@ -169,6 +270,12 @@ function main() {
     return;
   }
   const root = realpathSync(repo);
+  if (opts.sourceRevision &&
+    gitInRepo(root, "cat-file", "-t", opts.sourceRevision) !== "commit") {
+    fail(`Source revision is not a local commit: ${opts.sourceRevision}`);
+    finish();
+    return;
+  }
   const source = isAbsolute(opts.file) ? opts.file : resolve(cwd, opts.file);
   const sourceStat = lstatSync(source, { throwIfNoEntry: false });
   if (sourceStat?.isSymbolicLink()) {
@@ -214,24 +321,25 @@ function main() {
       fail(`ADR ID ${nameMatch[1]} is also used by: ${collisions.join(", ")}`);
   }
 
-  const headers = [];
-  lines.forEach((line, index) => {
+  const { visible, headers, bodies } = readSections(lines);
+  visible.forEach((line, index) => {
     if (index > 0 && /^#{1,6} /.test(line) && !/^## /.test(line)) {
       fail(
         `Unexpected Markdown heading on line ${index + 1}; only the fixed section headings are allowed`,
       );
     }
-    if (/^## /.test(line))
-      headers.push({ title: line.slice(3).trim(), line: index });
   });
+  const requiredHeaders = headers.filter((header) => header.title !== RELATED_SYMBOLS);
   if (
-    headers.length !== SECTIONS.length ||
-    headers.some((h, i) => h.title !== SECTIONS[i])
+    requiredHeaders.length !== SECTIONS.length ||
+    requiredHeaders.some((h, i) => h.title !== SECTIONS[i])
   ) {
     fail(
       `Sections must appear exactly once in this order: ${SECTIONS.join(" -> ")}`,
     );
   }
+  if (headers.filter((header) => header.title === RELATED_SYMBOLS).length > 1)
+    fail("Related Symbols section must appear at most once");
   const firstSectionLine = headers.length ? headers[0].line : lines.length;
   const metadata = lines
     .slice(1, firstSectionLine)
@@ -261,18 +369,6 @@ function main() {
   if (metadata.some((line) => isPlaceholder(line)))
     fail("Metadata contains a placeholder");
 
-  const bodies = new Map();
-  for (let i = 0; i < headers.length; i++) {
-    const nextLine =
-      i + 1 < headers.length ? headers[i + 1].line : lines.length;
-    bodies.set(
-      headers[i].title,
-      lines
-        .slice(headers[i].line + 1, nextLine)
-        .join("\n")
-        .trim(),
-    );
-  }
   for (const section of SECTIONS) {
     const body = bodies.get(section);
     if (!body) {
@@ -288,6 +384,7 @@ function main() {
       fail(`${section} must contain verified facts, not "Not recorded."`);
     }
   }
+  validateRelatedSymbols(bodies.get(RELATED_SYMBOLS), root, opts.sourceRevision);
 
   const remoteUrl = gitInRepo(root, "remote", "get-url", opts.remote);
   if (!remoteUrl) fail(`Git remote ${opts.remote} does not exist`);
@@ -339,10 +436,10 @@ function finish(file) {
     process.exitCode = 1;
   } else {
     console.log(
-      `PASS: ADR structure, local commits, and remote URL format: ${file}`,
+      `PASS: ADR structure, source files, local commits, and remote URL format: ${file}`,
     );
     console.log(
-      "NOTE: Human review is still required for facts, ASD-STE100, and remote URL reachability.",
+      "NOTE: Human review is still required for facts, symbol declarations, ASD-STE100, and remote URL reachability.",
     );
   }
 }
@@ -385,6 +482,7 @@ export function validateAdrs(revision, paths) {
   const selected = paths ?? files.filter((path) => path.endsWith(".md"));
   if (selected.length === 0) return [];
 
+  const sourceRevision = git("rev-parse", "--verify", `${revision}^{commit}`);
   const validator = fileURLToPath(import.meta.url);
   const gitDir = git("rev-parse", "--absolute-git-dir");
   const snapshot = realpathSync(mkdtempSync(join(tmpdir(), "adr-validation-")));
@@ -410,7 +508,8 @@ export function validateAdrs(revision, paths) {
     return selected.map((path) => {
       const result = spawnSync(
         process.execPath,
-        [validator, path, "--repo", snapshot, "--remote", remote],
+        [validator, path, "--repo", snapshot, "--remote", remote,
+          "--source-revision", sourceRevision],
         { cwd: snapshot, env, encoding: "utf8" },
       );
       if (result.status !== 0) {
@@ -423,13 +522,9 @@ export function validateAdrs(revision, paths) {
       }
 
       const lines = readFileSync(join(snapshot, path), "utf8").split("\n");
-      const heading = lines.findIndex(
-        (line) =>
-          line.startsWith("## ") &&
-          line.slice(3).trim() === "Implementation Commit",
-      );
-      const links = lines
-        .slice(heading + 1)
+      const { bodies } = readSections(lines);
+      const links = bodies.get("Implementation Commit")
+        .split("\n")
         .map((line) => line.trim())
         .filter(Boolean)
         .map((line) => parseCommitURL(line.slice(2).trim()).sha);
