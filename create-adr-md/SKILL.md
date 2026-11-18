@@ -113,7 +113,7 @@ Use the heading `## Related Symbols` at most once, after the metadata and at any
 
 Determine the language from the file extension, source syntax, and build configuration. Read only the matching section of `references/types.md`. For a mixed-language ADR, read each matching section.
 
-- `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, or `.cjs`: [TypeScript and JavaScript](references/types.md#typescript-and-javascript).
+- `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, or `.cjs`: [TS and JS](references/types.md#ts-and-js).
 - `.c`, `.h`, `.cc`, `.cpp`, `.cxx`, `.c++`, `.hh`, `.hpp`, `.hxx`, `.h++`, `.ipp`, `.inl`, `.tpp`, `.ixx`, or `.cppm`: [C and C++](references/types.md#c-and-c).
 - `.swift` or `.swiftinterface`: [Swift](references/types.md#swift).
 - `.py`, `.pyi`, or `.pyw`: [Python](references/types.md#python).

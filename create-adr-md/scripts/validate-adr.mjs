@@ -34,7 +34,7 @@ const SECTIONS = [
 ];
 const RELATED_SYMBOLS = "Related Symbols";
 const TYPE_CATALOG_SECTIONS = [
-  "TypeScript and JavaScript",
+  "TS and JS",
   "C and C++",
   "Swift",
   "Python",

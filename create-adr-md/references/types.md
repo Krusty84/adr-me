@@ -3,7 +3,7 @@
 Select a type only from the section for the source language. Each section is
 self-contained. Use lowercase values exactly as shown.
 
-## TypeScript and JavaScript
+## TS and JS
 
 | Type | Use for |
 |---|---|
