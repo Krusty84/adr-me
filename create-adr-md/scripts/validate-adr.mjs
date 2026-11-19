@@ -260,23 +260,41 @@ function loadSymbolTypes() {
   }
   return types;
 }
-function sourceFileExists(root, path, revision) {
+function countSourceLines(content) {
+  if (content.length === 0) return 0;
+  let lines = content[content.length - 1] === 0x0a ? 0 : 1;
+  for (const byte of content) {
+    if (byte === 0x0a) lines++;
+  }
+  return lines;
+}
+function sourceFileLineCount(root, path, revision) {
   if (revision) {
     const entries = gitInRepo(root, "--literal-pathspecs", "ls-tree", "-z", revision, "--", path);
-    return (entries ?? "").split("\0").some((entry) => {
-      const tab = entry.indexOf("\t");
-      return /^100(?:644|755) blob /.test(entry) && entry.slice(tab + 1) === path;
+    const entry = (entries ?? "").split("\0").find((candidate) => {
+      const tab = candidate.indexOf("\t");
+      return /^100(?:644|755) blob /.test(candidate) && candidate.slice(tab + 1) === path;
     });
+    const object = entry?.match(/^100(?:644|755) blob ([0-9a-f]+)\t/);
+    if (!object) return null;
+    const result = spawnSync("git", ["cat-file", "blob", object[1]], {
+      cwd: root,
+      encoding: null,
+      timeout: 10000,
+    });
+    if (result.error || result.status !== 0) return null;
+    return countSourceLines(result.stdout);
   }
   let target = root;
   for (const part of path.split("/")) {
     if (
       !lstatSync(target, { throwIfNoEntry: false })?.isDirectory() ||
       !readdirSync(target).includes(part)
-    ) return false;
+    ) return null;
     target = join(target, part);
   }
-  return lstatSync(target, { throwIfNoEntry: false })?.isFile() ?? false;
+  if (!lstatSync(target, { throwIfNoEntry: false })?.isFile()) return null;
+  return countSourceLines(readFileSync(target));
 }
 function validateRelatedSymbols(body, root, revision, allowedTypes) {
   if (isPlaceholder(body ?? "")) {
@@ -288,21 +306,22 @@ function validateRelatedSymbols(body, root, revision, allowedTypes) {
   if (lines.length === 0) return;
   const heading = parseTableRow(lines[0]);
   if (
-    heading?.length !== 3 ||
-    heading[0] !== "Symbol" || heading[1] !== "File" || heading[2] !== "Type"
+    heading?.length !== 4 ||
+    heading[0] !== "Symbol" || heading[1] !== "File" ||
+    heading[2] !== "Type" || heading[3] !== "Lines"
   ) {
-    fail("Related Symbols must start with the table header: | Symbol | File | Type |");
+    fail("Related Symbols must start with the table header: | Symbol | File | Type | Lines |");
     return;
   }
-  if (!isTableSeparator(parseTableRow(lines[1] ?? ""), 3)) {
-    fail("Related Symbols requires a three-column Markdown table separator");
+  if (!isTableSeparator(parseTableRow(lines[1] ?? ""), 4)) {
+    fail("Related Symbols requires a four-column Markdown table separator");
     return;
   }
   const seen = new Set();
   for (const line of lines.slice(2)) {
     const row = parseTableRow(line);
-    if (row?.length !== 3) {
-      fail(`Each Related Symbols row must have three columns: ${line.trim()}`);
+    if (row?.length !== 4) {
+      fail(`Each Related Symbols row must have four columns: ${line.trim()}`);
       continue;
     }
     const symbolMatch = row[0].match(/^`([^`]+)`$/);
@@ -331,11 +350,21 @@ function validateRelatedSymbols(body, root, revision, allowedTypes) {
       fail(`Invalid related symbol type: ${type}`);
       continue;
     }
+    const linesMatch = row[3].match(/^`([1-9]\d*)`$/);
+    const sourceLine = Number(linesMatch?.[1]);
+    if (!linesMatch || !Number.isSafeInteger(sourceLine)) {
+      fail(`Invalid related symbol lines: ${row[3]}`);
+      continue;
+    }
     const key = `${path}\0${symbol}`;
     if (seen.has(key)) fail(`Duplicate related symbol: ${path}#${symbol}`);
     seen.add(key);
-    if (!sourceFileExists(root, path, revision))
+    const sourceLines = sourceFileLineCount(root, path, revision);
+    if (sourceLines === null) {
       fail(`Source file does not exist with exact case: ${path}`);
+    } else if (sourceLine > sourceLines) {
+      fail(`Related symbol line is outside source file: ${path}:${sourceLine}`);
+    }
   }
 }
 

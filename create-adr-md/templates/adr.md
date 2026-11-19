@@ -31,9 +31,9 @@
 
 ## Related Symbols
 
-| Symbol | File | Type |
-|---|---|---|
-| `<QualifiedName>` | `<repository-relative-path>` | <type-from-types.md> |
+| Symbol | File | Type | Lines |
+|---|---|---|---|
+| `<QualifiedName>` | `<repository-relative-path>` | <type-from-types.md> | `<line-number>` |
 
 ## Implementation Commit
 

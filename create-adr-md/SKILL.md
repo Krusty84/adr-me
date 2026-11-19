@@ -94,19 +94,20 @@ Do not add `Verified At` or `Scope` yet: these are reserved for a future ADR fre
 Use the heading `## Related Symbols` at most once, after the metadata and at any position among the standard sections. When creating an ADR, put it before `Implementation Commit`. Omit it if no symbol links are confirmed. An absent or empty section is valid. ADRs without this section need no migration. Convert list-based symbol links to the table. This section is outside the existing prose word limit.
 
 - Read the source to verify each declaration, qualified name, type, and relevance. Do not infer a link from a name alone.
-- Use exactly the columns `Symbol`, `File`, and `Type`. Put `Symbol` and `File` in inline code. Use one declaration per row and no description column.
-- Use a repository-relative file path, `/` separators, and exact path and symbol case. The path must identify an existing regular file. Do not use absolute paths, `.` or `..` path segments, call parentheses, or source line numbers. Preserve parentheses only when they are part of an operator name such as `operator()`.
+- Use exactly the columns `Symbol`, `File`, `Type`, and `Lines`. Put `Symbol`, `File`, and `Lines` in inline code. Use one declaration per row and no description column.
+- Use a repository-relative file path, `/` separators, and exact path and symbol case. The path must identify an existing regular file. Do not use absolute paths, `.` or `..` path segments, or call parentheses. Preserve parentheses only when they are part of an operator name such as `operator()`.
+- Set `Lines` to the declaration's 1-based start line. Use a positive decimal without leading zeros. Do not use a range. `Lines` supports navigation and is not part of the link identity.
 - Do not repeat the same `File` and `Symbol` pair within one ADR. One ADR can link several symbols. Several ADRs can link the same symbol.
-- Update affected rows after a file move or symbol rename. Local variables, parameters, generic parameters, overloaded declarations, extensions, and Rust `impl` blocks need a separate disambiguation rule. Use prose mentions for them.
+- Update affected rows after a file move, symbol rename, or declaration line change. Local variables, parameters, generic parameters, overloaded declarations, extensions, and Rust `impl` blocks need a separate disambiguation rule. Use prose mentions for them.
 
 ```markdown
 ## Related Symbols
 
-| Symbol                      | File                      | Type     |
-| --------------------------- | ------------------------- | -------- |
-| `PressureService.calculate` | `src/pressure/Service.ts` | method   |
-| `PressureService.flowRate`  | `src/pressure/Service.ts` | property |
-| `MAX_PRESSURE`              | `src/pressure/limits.ts`  | constant |
+| Symbol                      | File                      | Type     | Lines |
+| --------------------------- | ------------------------- | -------- | ----- |
+| `PressureService.calculate` | `src/pressure/Service.ts` | method   | `42`  |
+| `PressureService.flowRate`  | `src/pressure/Service.ts` | property | `18`  |
+| `MAX_PRESSURE`              | `src/pressure/limits.ts`  | constant | `7`   |
 ```
 
 ### Type routing
@@ -154,18 +155,18 @@ The validator checks:
 - HTTPS implementation commit URLs.
 - Git remote identity.
 - Existence of local implementation commits.
-- Related-symbol table syntax, allowed types, duplicate file-symbol pairs, and source files with exact path case.
+- Related-symbol table syntax, allowed types, duplicate file-symbol pairs, source files with exact path case, and source line bounds.
 
 ### Completion Requirements
 
 1. Run validation after each ADR change.
 2. Correct all errors.
 3. Repeat validation until it passes.
-4. Review factual accuracy, linked declarations, language-specific types, ambiguity, and ASD-STE100 compliance.
+4. Review factual accuracy, linked declarations and start lines, language-specific types, ambiguity, and ASD-STE100 compliance.
 5. Verify implementation commit URLs.
 6. Do not commit an invalid ADR.
 
-The validator cannot prove factual accuracy, symbol existence or unique resolution,
-full ASD-STE100 compliance, or URL reachability.
+The validator cannot prove factual accuracy, symbol existence, that `Lines` identifies
+the declaration, unique resolution, full ASD-STE100 compliance, or URL reachability.
 
 Run the **same validator** in a pre-commit hook and CI to enforce the contract outside the agent. Do not treat a successful validation as user approval.

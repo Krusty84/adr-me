@@ -10,13 +10,13 @@ const packagePath = fileURLToPath(new URL('../', import.meta.url));
 const source = fileURLToPath(new URL('../../', import.meta.url));
 const template = readFileSync(join(packagePath, 'templates', 'adr.md'), 'utf8');
 const adrPath = 'docs/adr/0001-cache.md';
-const relatedTableHeader = '| Symbol | File | Type |\n|---|---|---|';
+const relatedTableHeader = '| Symbol | File | Type | Lines |\n|---|---|---|---|';
 const relatedSymbolsTemplate = '## Related Symbols\n\n' +
   `${relatedTableHeader}\n` +
-  '| `<QualifiedName>` | `<repository-relative-path>` | <type-from-types.md> |\n\n';
+  '| `<QualifiedName>` | `<repository-relative-path>` | <type-from-types.md> | `<line-number>` |\n\n';
 const tableCell = value => value.replaceAll('|', '\\|');
-const relatedRow = (symbol = 'cache', file = 'src/cache.mjs', type = 'constant') =>
-  `| \`${tableCell(symbol)}\` | \`${tableCell(file)}\` | ${type} |`;
+const relatedRow = (symbol = 'cache', file = 'src/cache.mjs', type = 'constant', lines = '1') =>
+  `| \`${tableCell(symbol)}\` | \`${tableCell(file)}\` | ${type} | \`${lines}\` |`;
 const relatedTable = (rows = relatedRow()) => `${relatedTableHeader}\n${rows}`;
 const typeCatalog = readFileSync(join(packagePath, 'references', 'types.md'), 'utf8');
 const catalogTypes = [...new Set(
@@ -377,6 +377,22 @@ test('accepts a header-only Related Symbols table', t => {
   auditResult(repo.audit(), 0, 0);
 });
 
+test('accepts first and last source lines without a final newline', t => {
+  const repo = fixture(t);
+  const path = 'src/lines.ts';
+  repo.write(path, 'export const first = 1;\nexport const last = 2;');
+  const implementation = repo.commit();
+  const rows = [
+    relatedRow('first', path, 'constant', '1'),
+    relatedRow('last', path, 'constant', '2'),
+  ].join('\n');
+  repo.write(adrPath, relatedDocument([repo.implementation, implementation], relatedTable(rows)));
+  repo.commit();
+  status(repo.validate(), 0);
+  status(repo.hook(), 0);
+  auditResult(repo.audit(), 0, 0);
+});
+
 test('accepts symbols, paths, types, and aligned separators', t => {
   const repo = fixture(t);
   const path = 'src/[pressure]/Pressure Service.ts';
@@ -386,15 +402,15 @@ test('accepts symbols, paths, types, and aligned separators', t => {
     'export const MAX_PRESSURE = 10;\n');
   const implementation = repo.commit();
   const entries = [
-    ['Calculator', 'interface'], ['PressureService', 'class'],
-    ['PressureService.flowRate', 'property'], ['PressureService.calculate', 'method'],
-    ['validatePressure', 'function'], ['pressure', 'variable'], ['Pressure', 'variable'],
-    ['PressureService.#privateFlow', 'field'], ['Math.operator/', 'operator'],
-    ['Bitmask.operator|', 'operator'],
-    ['Callable::operator()', 'operator'], ['MAX_PRESSURE', 'constant'],
+    ['Calculator', 'interface', 1], ['PressureService', 'class', 2],
+    ['PressureService.flowRate', 'property', 2], ['PressureService.calculate', 'method', 2],
+    ['validatePressure', 'function', 3], ['pressure', 'variable', 4], ['Pressure', 'variable', 5],
+    ['PressureService.#privateFlow', 'field', 2], ['Math.operator/', 'operator', 2],
+    ['Bitmask.operator|', 'operator', 2],
+    ['Callable::operator()', 'operator', 2], ['MAX_PRESSURE', 'constant', 6],
   ];
-  const body = '| Symbol | File | Type |\n|:---|:---:|---:|\n' + entries
-    .map(([symbol, type]) => relatedRow(symbol, path, type)).join('\n');
+  const body = '| Symbol | File | Type | Lines |\n|:---|:---:|---:|:---:|\n' + entries
+    .map(([symbol, type, lines]) => relatedRow(symbol, path, type, lines)).join('\n');
   repo.write(adrPath, relatedDocument([repo.implementation, implementation], body));
   repo.commit();
   status(repo.validate(), 0);
@@ -418,12 +434,12 @@ for (const marker of ['```', '~~~~']) {
   test(`ignores fenced examples (${marker}) and prose mentions as exact links`, t => {
     const repo = fixture(t);
     const body = relatedTable() + `\n\n${marker}markdown\n` +
-      '| Symbol | File | Type |\n|---|---|---|\n' +
-      '| `Missing` | `missing.ts` | class |\n' + `${marker}\n`;
+      '| Symbol | File | Type | Lines |\n|---|---|---|---|\n' +
+      '| `Missing` | `missing.ts` | class | `1` |\n' + `${marker}\n`;
     const text = relatedDocument([repo.implementation], body).replace('Not recorded.',
       `Call \`cache.get()\` and read \`missingSymbol\`.\n\n${marker}markdown\n` +
-      '## Related Symbols\n| Symbol | File | Type |\n|---|---|---|\n' +
-      '| `Missing` | `missing.ts` | class |\n## Implementation Commit\n' +
+      '## Related Symbols\n| Symbol | File | Type | Lines |\n|---|---|---|---|\n' +
+      '| `Missing` | `missing.ts` | class | `1` |\n## Implementation Commit\n' +
       '- https://github.com/example/adr-tests/commit/ffffffffffffffffffffffffffffffffffffffff\n' +
       `### Example heading\n${marker}\n`);
     repo.write(adrPath, text);
@@ -461,18 +477,32 @@ for (const file of [
   });
 }
 
+for (const lines of ['0', '-1', '01', '1-2', 'L1']) {
+  test(`rejects malformed related lines ${JSON.stringify(lines)}`, t => {
+    const repo = fixture(t);
+    repo.write(adrPath, relatedDocument([repo.implementation],
+      relatedTable(relatedRow('cache', 'src/cache.mjs', 'constant', lines))));
+    const result = repo.validate();
+    status(result, 1);
+    assert.match(result.stderr, /Invalid related symbol lines:/);
+  });
+}
+
 for (const [name, body, error] of [
   ['old list format', '- `src/cache.mjs#cache`', /must start with the table header/],
-  ['wrong header', '| File | Symbol | Type |\n|---|---|---|', /must start with the table header/],
-  ['missing separator', '| Symbol | File | Type |\n' + relatedRow(), /table separator/],
-  ['short separator', '| Symbol | File | Type |\n|--|---|---|', /table separator/],
-  ['missing symbol backticks', relatedTable('| cache | `src/cache.mjs` | constant |'), /Invalid related symbol:/],
-  ['missing file backticks', relatedTable('| `cache` | src/cache.mjs | constant |'), /Invalid related symbol file:/],
-  ['extra column', relatedTable('| `cache` | `src/cache.mjs` | constant | note |'), /three columns/],
-  ['description line', `${relatedTable()}\nDescription.`, /three columns/],
+  ['wrong header', '| File | Symbol | Type | Lines |\n|---|---|---|---|', /must start with the table header/],
+  ['old three-column table', '| Symbol | File | Type |\n|---|---|---|\n| `cache` | `src/cache.mjs` | constant |', /must start with the table header/],
+  ['missing separator', '| Symbol | File | Type | Lines |\n' + relatedRow(), /table separator/],
+  ['short separator', '| Symbol | File | Type | Lines |\n|--|---|---|---|', /table separator/],
+  ['missing symbol backticks', relatedTable('| cache | `src/cache.mjs` | constant | `1` |'), /Invalid related symbol:/],
+  ['missing file backticks', relatedTable('| `cache` | src/cache.mjs | constant | `1` |'), /Invalid related symbol file:/],
+  ['missing Lines backticks', relatedTable('| `cache` | `src/cache.mjs` | constant | 1 |'), /Invalid related symbol lines:/],
+  ['extra column', relatedTable('| `cache` | `src/cache.mjs` | constant | `1` | note |'), /four columns/],
+  ['description line', `${relatedTable()}\nDescription.`, /four columns/],
   ['unknown type', relatedTable(relatedRow('cache', 'src/cache.mjs', 'unknown')), /Invalid related symbol type/],
   ['uppercase type', relatedTable(relatedRow('cache', 'src/cache.mjs', 'Constant')), /Invalid related symbol type/],
-  ['duplicate reference', relatedTable(`${relatedRow()}\n${relatedRow('cache', 'src/cache.mjs', 'variable')}`), /Duplicate related symbol/],
+  ['duplicate reference', relatedTable(`${relatedRow()}\n${relatedRow('cache', 'src/cache.mjs', 'variable', '2')}`), /Duplicate related symbol/],
+  ['line outside source file', relatedTable(relatedRow('cache', 'src/cache.mjs', 'constant', '2')), /Related symbol line is outside source file/],
   ['missing file', relatedTable(relatedRow('cache', 'src/missing.mjs')), /Source file does not exist with exact case/],
   ['wrong filename case', relatedTable(relatedRow('cache', 'src/Cache.mjs')), /Source file does not exist with exact case/],
   ['wrong directory case', relatedTable(relatedRow('cache', 'Src/cache.mjs')), /Source file does not exist with exact case/],
@@ -532,6 +562,25 @@ for (const objectFormat of ['sha1', 'sha256']) {
     const result = repo.validate(adrPath, ['--source-revision', repo.base]);
     status(result, 1);
     assert.match(result.stderr, /Source file does not exist with exact case/);
+  });
+
+  test(`${objectFormat} checks source lines at the requested revision`, t => {
+    const repo = fixture(t, objectFormat);
+    repo.write('src/cache.mjs', 'export const first = 1;\nexport const cache = 2;\n');
+    const twoLineRevision = repo.commit();
+    repo.write(adrPath, relatedDocument([repo.implementation, twoLineRevision],
+      relatedTable(relatedRow('cache', 'src/cache.mjs', 'constant', '2'))));
+    repo.commit();
+    repo.write('src/cache.mjs', 'export const cache = 1;\n');
+    const workingResult = repo.validate();
+    status(workingResult, 1);
+    assert.match(workingResult.stderr, /Related symbol line is outside source file/);
+    status(repo.validate(adrPath, ['--source-revision', twoLineRevision]), 0);
+    status(repo.hook(), 0);
+    auditResult(repo.audit(), 0, 0);
+    const revisionResult = repo.validate(adrPath, ['--source-revision', repo.implementation]);
+    status(revisionResult, 1);
+    assert.match(revisionResult.stderr, /Related symbol line is outside source file/);
   });
 }
 
