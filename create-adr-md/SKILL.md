@@ -94,20 +94,23 @@ Do not add `Verified At` or `Scope` yet: these are reserved for a future ADR fre
 Use the heading `## Related Symbols` at most once, after the metadata and at any position among the standard sections. When creating an ADR, put it before `Implementation Commit`. Omit it if no symbol links are confirmed. An absent or empty section is valid. ADRs without this section need no migration. Convert list-based symbol links to the table. This section is outside the existing prose word limit.
 
 - Read the source to verify each declaration, qualified name, type, and relevance. Do not infer a link from a name alone.
-- Use exactly the columns `Symbol`, `File`, `Type`, and `Lines`. Put `Symbol`, `File`, and `Lines` in inline code. Use one declaration per row and no description column.
+- Use exactly the columns `Symbol`, `File`, `Type`, and `Lines`. Put `Symbol` and `File` in inline code. Use one declaration per row and no description column.
 - Use a repository-relative file path, `/` separators, and exact path and symbol case. The path must identify an existing regular file. Do not use absolute paths, `.` or `..` path segments, or call parentheses. Preserve parentheses only when they are part of an operator name such as `operator()`.
 - Set `Lines` to the 1-based line that contains the symbol name in its declaration. Use one positive decimal without leading zeros.
+- In the selected remote's web interface, select the line number and copy its permalink. Put the number and permalink in a Markdown link. Use HTTPS and the full SHA of the verified local commit. Use the same number in the link text and the `#L` fragment.
+- Use the route after the project path in the permalink. GitHub uses `/blob/`. GitLab uses `/-/blob/`, including for projects in nested groups. Both routes also work with custom hostnames that match the remote. Percent-encode spaces and special characters in each path segment. Keep `/` separators.
+- If a supported permalink is unavailable, use the number in inline code.
 - Do not repeat the same `File` and `Symbol` pair within one ADR. One ADR can link several symbols. Several ADRs can link the same symbol.
-- Update affected rows after a file move, symbol rename, or change to the line number of the symbol name. Local variables, parameters, generic parameters, overloaded declarations, extensions, and Rust `impl` blocks need a separate disambiguation rule. Use prose mentions for them.
+- Update numeric rows after a file move, symbol rename, or change to the line number of the symbol name. Local variables, parameters, generic parameters, overloaded declarations, extensions, and Rust `impl` blocks need a separate disambiguation rule. Use prose mentions for them.
 
 ```markdown
 ## Related Symbols
 
-| Symbol                      | File                      | Type     | Lines |
-| --------------------------- | ------------------------- | -------- | ----- |
-| `PressureService.calculate` | `src/pressure/Service.ts` | method   | `42`  |
-| `PressureService.flowRate`  | `src/pressure/Service.ts` | property | `18`  |
-| `MAX_PRESSURE`              | `src/pressure/limits.ts`  | constant | `7`   |
+| Symbol                      | File                      | Type     | Lines                                                                                                                |
+| --------------------------- | ------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
+| `PressureService.calculate` | `src/pressure/Service.ts` | method   | [42](https://forge.example/team/project/-/blob/0123456789abcdef0123456789abcdef01234567/src/pressure/Service.ts#L42) |
+| `PressureService.flowRate`  | `src/pressure/Service.ts` | property | [18](https://forge.example/team/project/-/blob/0123456789abcdef0123456789abcdef01234567/src/pressure/Service.ts#L18) |
+| `MAX_PRESSURE`              | `src/pressure/limits.ts`  | constant | [7](https://forge.example/team/project/-/blob/0123456789abcdef0123456789abcdef01234567/src/pressure/limits.ts#L7)    |
 ```
 
 ### Type routing
@@ -156,6 +159,7 @@ The validator checks:
 - Git remote identity.
 - Existence of local implementation commits.
 - Related-symbol table syntax, allowed types, duplicate file-symbol pairs, source files with exact path case, and source line bounds.
+- The remote repository, local commit, decoded file path, and line number for each line permalink. The validator reads the file at the SHA in the link.
 - The complete symbol name with exact case on the specified source line. For a name qualified with `.` or `::`, the validator checks the name after the qualifiers.
 
 ### Completion Requirements

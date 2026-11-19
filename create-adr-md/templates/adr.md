@@ -33,7 +33,7 @@
 
 | Symbol | File | Type | Lines |
 |---|---|---|---|
-| `<QualifiedName>` | `<repository-relative-path>` | <type-from-types.md> | `<line-number>` |
+| `<QualifiedName>` | `<repository-relative-path>` | <type-from-types.md> | [<line-number>](<line-permalink>) |
 
 ## Implementation Commit
 

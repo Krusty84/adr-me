@@ -29,6 +29,8 @@ When appropriate, include these sections:
 - Build / validation notes
 - Known constraints
 
+In each section you include, add a link next to each key fact that a repository file supports. Check the line number in the current file. Use a path relative to `ARCHITECTURE.md` and show the path and line number in the link text, for example `[src/main.ts:42](src/main.ts#L42)`. For Markdown files, add `?plain=1` before the line anchor.
+
 ## Steps
 
 1. Read the existing architecture document if present.

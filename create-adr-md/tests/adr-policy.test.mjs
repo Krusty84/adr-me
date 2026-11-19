@@ -11,7 +11,8 @@ const adrPath = 'docs/adr/0001-cache.md';
 const template = readFileSync(join(source, 'create-adr-md/templates/adr.md'), 'utf8');
 const relatedSymbolsTemplate = '## Related Symbols\n\n' +
   '| Symbol | File | Type | Lines |\n|---|---|---|---|\n' +
-  '| `<QualifiedName>` | `<repository-relative-path>` | <type-from-types.md> | `<line-number>` |\n\n';
+  '| `<QualifiedName>` | `<repository-relative-path>` | <type-from-types.md> | ' +
+  '[<line-number>](<line-permalink>) |\n\n';
 
 function document(links, recordType = 'Agent-Session') {
   return template

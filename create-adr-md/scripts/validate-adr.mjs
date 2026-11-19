@@ -152,6 +152,32 @@ function parseCommitURL(raw) {
     return null;
   }
 }
+function parseSourceLineLink(cell, projectDepth) {
+  const match = cell.match(/^\[([1-9]\d*)\]\((https:\/\/[^\s()<>\\|?&]+)\)$/);
+  if (!match) return null;
+  const [, line, raw] = match;
+  try {
+    const url = new URL(raw);
+    if (url.username || url.password || url.port || url.hash !== `#L${line}`)
+      return null;
+    const parts = url.pathname.slice(1).split("/");
+    const blobIndex = parts[projectDepth] === "-" ? projectDepth + 1 : projectDepth;
+    const [view, sha, ...path] = parts.slice(blobIndex);
+    if (view !== "blob" || !new RegExp(`^${SHA_PATTERN}$`, "i").test(sha) || !path.length)
+      return null;
+    const segments = [...parts.slice(0, projectDepth), ...path].map(decodeURIComponent);
+    if (segments.some((segment) => !segment || /[/\\]/.test(segment))) return null;
+    return {
+      host: url.hostname,
+      project: segments.slice(0, projectDepth).join("/"),
+      sha: sha.toLowerCase(),
+      path: segments.slice(projectDepth).join("/"),
+      line,
+    };
+  } catch {
+    return null;
+  }
+}
 function isValidDate(s) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
   const date = new Date(`${s}T00:00:00.000Z`);
@@ -301,7 +327,7 @@ function sourceLineContainsSymbol(line, symbol) {
   const left = prefix ? identifier : identifier + punctuation;
   return new RegExp(`(?<![${left}])${prefix}${literal}(?![${identifier}${punctuation}])`, "u").test(line);
 }
-function validateRelatedSymbols(body, root, revision, allowedTypes) {
+function validateRelatedSymbols(body, root, opts, allowedTypes, remote) {
   if (isPlaceholder(body ?? "")) {
     fail("Related Symbols contains a placeholder");
     return;
@@ -322,6 +348,7 @@ function validateRelatedSymbols(body, root, revision, allowedTypes) {
     fail("Related Symbols requires a four-column Markdown table separator");
     return;
   }
+  const projectDepth = remote?.project.split("/").length ?? 0;
   const seen = new Set();
   for (const line of lines.slice(2)) {
     const row = parseTableRow(line);
@@ -356,15 +383,30 @@ function validateRelatedSymbols(body, root, revision, allowedTypes) {
       continue;
     }
     const linesMatch = row[3].match(/^`([1-9]\d*)`$/);
-    const sourceLine = Number(linesMatch?.[1]);
-    if (!linesMatch || !Number.isSafeInteger(sourceLine)) {
+    const link = linesMatch ? null : parseSourceLineLink(row[3], projectDepth);
+    const sourceLine = Number(linesMatch?.[1] ?? link?.line);
+    if (!Number.isSafeInteger(sourceLine)) {
       fail(`Invalid related symbol lines: ${row[3]}`);
       continue;
     }
     const key = `${path}\0${symbol}`;
     if (seen.has(key)) fail(`Duplicate related symbol: ${path}#${symbol}`);
     seen.add(key);
-    const content = readSourceFile(root, path, revision);
+    if (link) {
+      if (!remote || link.host !== remote.host || link.project !== remote.project) {
+        fail(`Related symbol link does not match Git remote ${opts.remote}: ${row[3]}`);
+        continue;
+      }
+      if (link.path !== path) {
+        fail(`Related symbol link does not match File: ${row[3]} (expected ${path})`);
+        continue;
+      }
+      if (gitInRepo(root, "rev-parse", "--verify", `${link.sha}^{commit}`) !== link.sha) {
+        fail(`Related symbol link revision is not a local commit: ${link.sha}`);
+        continue;
+      }
+    }
+    const content = readSourceFile(root, path, link?.sha ?? opts.sourceRevision);
     if (content === null) {
       fail(`Source file does not exist with exact case: ${path}`);
       continue;
@@ -522,18 +564,12 @@ function main() {
       fail(`${section} must contain verified facts, not "Not recorded."`);
     }
   }
-  validateRelatedSymbols(
-    bodies.get(RELATED_SYMBOLS),
-    root,
-    opts.sourceRevision,
-    allowedSymbolTypes,
-  );
-
   const remoteUrl = gitInRepo(root, "remote", "get-url", opts.remote);
   if (!remoteUrl) fail(`Git remote ${opts.remote} does not exist`);
   const remote = remoteUrl ? parseRemote(remoteUrl) : null;
   if (remoteUrl && !remote)
     fail(`Cannot parse Git remote ${opts.remote} as a hosted repository URL`);
+  validateRelatedSymbols(bodies.get(RELATED_SYMBOLS), root, opts, allowedSymbolTypes, remote);
 
   const impl = bodies.get("Implementation Commit") ?? "";
   const implLines = impl
