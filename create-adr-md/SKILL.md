@@ -28,7 +28,7 @@ Use the template without adding, deleting, renaming, or reordering its attribute
 - State verifiable facts. Do not invent the task, intent, reasons, alternatives, risks, or outcomes.
 - Use `Not recorded.` for a missing _Context_, _Rationale_, _Alternatives_, or _Consequences_ item. Do not invent evidence to complete a section.
 - The _Decision_ and _Implementation_ sections must contain supported facts. If the decision cannot be identified, stop and request human input.
-- Review English, length limits, and ASD-STE100 separately. The validator checks structure, commit links, and source file paths.
+- Review English, length limits, and ASD-STE100 separately. The validator checks structure, commit links, source paths, and symbol lines.
 
 ## Fixed document contract
 
@@ -96,9 +96,9 @@ Use the heading `## Related Symbols` at most once, after the metadata and at any
 - Read the source to verify each declaration, qualified name, type, and relevance. Do not infer a link from a name alone.
 - Use exactly the columns `Symbol`, `File`, `Type`, and `Lines`. Put `Symbol`, `File`, and `Lines` in inline code. Use one declaration per row and no description column.
 - Use a repository-relative file path, `/` separators, and exact path and symbol case. The path must identify an existing regular file. Do not use absolute paths, `.` or `..` path segments, or call parentheses. Preserve parentheses only when they are part of an operator name such as `operator()`.
-- Set `Lines` to the declaration's 1-based start line. Use a positive decimal without leading zeros. Do not use a range. `Lines` supports navigation and is not part of the link identity.
+- Set `Lines` to the 1-based line that contains the symbol name in its declaration. Use one positive decimal without leading zeros.
 - Do not repeat the same `File` and `Symbol` pair within one ADR. One ADR can link several symbols. Several ADRs can link the same symbol.
-- Update affected rows after a file move, symbol rename, or declaration line change. Local variables, parameters, generic parameters, overloaded declarations, extensions, and Rust `impl` blocks need a separate disambiguation rule. Use prose mentions for them.
+- Update affected rows after a file move, symbol rename, or change to the line number of the symbol name. Local variables, parameters, generic parameters, overloaded declarations, extensions, and Rust `impl` blocks need a separate disambiguation rule. Use prose mentions for them.
 
 ```markdown
 ## Related Symbols
@@ -156,17 +156,17 @@ The validator checks:
 - Git remote identity.
 - Existence of local implementation commits.
 - Related-symbol table syntax, allowed types, duplicate file-symbol pairs, source files with exact path case, and source line bounds.
+- The complete symbol name with exact case on the specified source line. For a name qualified with `.` or `::`, the validator checks the name after the qualifiers.
 
 ### Completion Requirements
 
 1. Run validation after each ADR change.
 2. Correct all errors.
 3. Repeat validation until it passes.
-4. Review factual accuracy, linked declarations and start lines, language-specific types, ambiguity, and ASD-STE100 compliance.
-5. Verify implementation commit URLs.
-6. Do not commit an invalid ADR.
-
-The validator cannot prove factual accuracy, symbol existence, that `Lines` identifies
-the declaration, unique resolution, full ASD-STE100 compliance, or URL reachability.
+4. Review factual accuracy and ASD-STE100 compliance.
+5. Confirm each linked declaration, qualifier, `Type`, and `Lines`.
+6. Check for ambiguous links.
+7. Verify that implementation commit URLs open the intended commits.
+8. Do not commit an invalid ADR.
 
 Run the **same validator** in a pre-commit hook and CI to enforce the contract outside the agent. Do not treat a successful validation as user approval.

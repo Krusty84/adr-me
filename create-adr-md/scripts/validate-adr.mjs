@@ -260,15 +260,7 @@ function loadSymbolTypes() {
   }
   return types;
 }
-function countSourceLines(content) {
-  if (content.length === 0) return 0;
-  let lines = content[content.length - 1] === 0x0a ? 0 : 1;
-  for (const byte of content) {
-    if (byte === 0x0a) lines++;
-  }
-  return lines;
-}
-function sourceFileLineCount(root, path, revision) {
+function readSourceFile(root, path, revision) {
   if (revision) {
     const entries = gitInRepo(root, "--literal-pathspecs", "ls-tree", "-z", revision, "--", path);
     const entry = (entries ?? "").split("\0").find((candidate) => {
@@ -283,7 +275,7 @@ function sourceFileLineCount(root, path, revision) {
       timeout: 10000,
     });
     if (result.error || result.status !== 0) return null;
-    return countSourceLines(result.stdout);
+    return result.stdout;
   }
   let target = root;
   for (const part of path.split("/")) {
@@ -294,7 +286,20 @@ function sourceFileLineCount(root, path, revision) {
     target = join(target, part);
   }
   if (!lstatSync(target, { throwIfNoEntry: false })?.isFile()) return null;
-  return countSourceLines(readFileSync(target));
+  return readFileSync(target);
+}
+function sourceLineContainsSymbol(line, symbol) {
+  const identifier = "\\p{ID_Continue}$#\\u200C\\u200D";
+  const qualifier = new RegExp(`^(?:::)?(?:[${identifier}]+(?:\\.|::))*(?=.)`, "u");
+  const name = symbol.replace(qualifier, "");
+  const operatorChars = "\\p{Sm}!%&*+./:<=>?^|~\\-";
+  const operator = new RegExp(`^(operator)?([${operatorChars}]+|\\(\\)|\\[\\])$`, "u").exec(name);
+  const token = operator?.[2] ?? name;
+  const literal = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const prefix = operator?.[1] ? "operator[ \\t]*" : "";
+  const punctuation = operator && token !== "()" && token !== "[]" ? operatorChars : "";
+  const left = prefix ? identifier : identifier + punctuation;
+  return new RegExp(`(?<![${left}])${prefix}${literal}(?![${identifier}${punctuation}])`, "u").test(line);
 }
 function validateRelatedSymbols(body, root, revision, allowedTypes) {
   if (isPlaceholder(body ?? "")) {
@@ -359,11 +364,17 @@ function validateRelatedSymbols(body, root, revision, allowedTypes) {
     const key = `${path}\0${symbol}`;
     if (seen.has(key)) fail(`Duplicate related symbol: ${path}#${symbol}`);
     seen.add(key);
-    const sourceLines = sourceFileLineCount(root, path, revision);
-    if (sourceLines === null) {
+    const content = readSourceFile(root, path, revision);
+    if (content === null) {
       fail(`Source file does not exist with exact case: ${path}`);
-    } else if (sourceLine > sourceLines) {
+      continue;
+    }
+    const sourceLines = content.toString("utf8").split(/\r?\n/);
+    if (sourceLines.at(-1) === "") sourceLines.pop();
+    if (sourceLine > sourceLines.length) {
       fail(`Related symbol line is outside source file: ${path}:${sourceLine}`);
+    } else if (!sourceLineContainsSymbol(sourceLines[sourceLine - 1], symbol)) {
+      fail(`Related symbol name not found on source line: ${symbol} at ${path}:${sourceLine}`);
     }
   }
 }

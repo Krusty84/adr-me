@@ -377,10 +377,10 @@ test('accepts a header-only Related Symbols table', t => {
   auditResult(repo.audit(), 0, 0);
 });
 
-test('accepts first and last source lines without a final newline', t => {
+test('accepts first and last CRLF source lines without a final newline', t => {
   const repo = fixture(t);
   const path = 'src/lines.ts';
-  repo.write(path, 'export const first = 1;\nexport const last = 2;');
+  repo.write(path, 'export const first = 1;\r\nexport const last = 2;');
   const implementation = repo.commit();
   const rows = [
     relatedRow('first', path, 'constant', '1'),
@@ -396,21 +396,29 @@ test('accepts first and last source lines without a final newline', t => {
 test('accepts symbols, paths, types, and aligned separators', t => {
   const repo = fixture(t);
   const path = 'src/[pressure]/Pressure Service.ts';
+  const operatorsPath = 'src/operators.cpp';
+  const swiftPath = 'src/operators.swift';
   repo.write(path, 'export interface Calculator { calculate(): number; }\n' +
-    'export class PressureService { flowRate = 0; calculate() { return this.flowRate; } }\n' +
-    'export function validatePressure() {}\nexport let pressure = 0;\nexport let Pressure = 0;\n' +
-    'export const MAX_PRESSURE = 10;\n');
+    'export class PressureService { #privateFlow = 0; flowRate = 0; calculate() { return this.#privateFlow; } }\n' +
+    'export function\n  validatePressure() {}\nexport let pressure = 0;\nexport let Pressure = 0;\n' +
+    'export const MAX_PRESSURE = 10;\nexport const presión = 0;\n');
+  repo.write(operatorsPath, 'struct Math { Math operator/(int) const; };\n' +
+    'struct Bitmask { Bitmask operator |(Bitmask) const; };\n' +
+    'struct Callable { void operator()() const; void invoke() const; };\n');
+  repo.write(swiftPath, 'infix operator ..<\n');
   const implementation = repo.commit();
   const entries = [
     ['Calculator', 'interface', 1], ['PressureService', 'class', 2],
     ['PressureService.flowRate', 'property', 2], ['PressureService.calculate', 'method', 2],
-    ['validatePressure', 'function', 3], ['pressure', 'variable', 4], ['Pressure', 'variable', 5],
-    ['PressureService.#privateFlow', 'field', 2], ['Math.operator/', 'operator', 2],
-    ['Bitmask.operator|', 'operator', 2],
-    ['Callable::operator()', 'operator', 2], ['MAX_PRESSURE', 'constant', 6],
+    ['PressureService.#privateFlow', 'field', 2], ['validatePressure', 'function', 4],
+    ['pressure', 'variable', 5], ['Pressure', 'variable', 6],
+    ['MAX_PRESSURE', 'constant', 7], ['presión', 'constant', 8],
+    ['Math.operator/', 'operator', 1, operatorsPath], ['Bitmask.operator|', 'operator', 2, operatorsPath],
+    ['Callable::operator()', 'operator', 3, operatorsPath], ['Callable::invoke', 'method', 3, operatorsPath],
+    ['..<', 'operator', 1, swiftPath],
   ];
   const body = '| Symbol | File | Type | Lines |\n|:---|:---:|---:|:---:|\n' + entries
-    .map(([symbol, type, lines]) => relatedRow(symbol, path, type, lines)).join('\n');
+    .map(([symbol, type, lines, file = path]) => relatedRow(symbol, file, type, lines)).join('\n');
   repo.write(adrPath, relatedDocument([repo.implementation, implementation], body));
   repo.commit();
   status(repo.validate(), 0);
@@ -421,13 +429,64 @@ test('accepts symbols, paths, types, and aligned separators', t => {
 test('accepts every type declared by the language catalog', t => {
   const repo = fixture(t);
   assert.ok(catalogTypes.length > 0);
+  const path = 'src/catalog.mjs';
+  const names = catalogTypes.map((_, index) => `CatalogSymbol${index}`);
+  repo.write(path, names.map(name => `export const ${name} = 0;\n`).join(''));
+  const implementation = repo.commit();
   const rows = catalogTypes.map((type, index) =>
-    relatedRow(`CatalogSymbol${index}`, 'src/cache.mjs', type)).join('\n');
-  repo.write(adrPath, relatedDocument([repo.implementation], relatedTable(rows)));
+    relatedRow(names[index], path, type, index + 1)).join('\n');
+  repo.write(adrPath, relatedDocument([repo.implementation, implementation], relatedTable(rows)));
   repo.commit();
   status(repo.validate(), 0);
   status(repo.hook(), 0);
   auditResult(repo.audit(), 0, 0);
+});
+
+test('rejects a different case or a partial related symbol name', t => {
+  const repo = fixture(t);
+  const path = 'src/pressure.ts';
+  const symbol = 'PressureService.calculate';
+  const names = ['Calculate', 'recalculate', 'calculateTotal', 'écalculate', '#calculate'];
+  repo.write(path, 'export class PressureService {\n' +
+    names.map(name => `  ${name}() {}\n`).join('') + '}\n');
+  for (const [index, name] of names.entries()) {
+    const line = index + 2;
+    const row = relatedRow(symbol, path, 'method', line);
+    repo.write(adrPath, relatedDocument([repo.implementation], relatedTable(row)));
+    const result = repo.validate();
+    status(result, 1);
+    assert.ok(result.stderr.includes(`Related symbol name not found on source line: ${symbol} at ${path}:${line}`),
+      `Unexpected diagnostic for ${name}: ${result.stderr}`);
+  }
+});
+
+test('rejects a related operator name that is a prefix of another operator', t => {
+  const repo = fixture(t);
+  const path = 'src/operators.cpp';
+  repo.write(path, 'struct Bitmask { Bitmask operator||(Bitmask) const; };\n');
+  const row = relatedRow('Bitmask::operator|', path, 'operator', 1);
+  repo.write(adrPath, relatedDocument([repo.implementation], relatedTable(row)));
+  const result = repo.validate();
+  status(result, 1);
+  assert.match(result.stderr, /Related symbol name not found on source line: Bitmask::operator\| at src\/operators\.cpp:1/);
+});
+
+test('rejects a stale related symbol line within the source file through all entry points', t => {
+  const repo = fixture(t);
+  repo.write(adrPath, relatedDocument([repo.implementation]));
+  repo.commit();
+  repo.write('src/cache.mjs', 'export const size = 0;\nexport const cache = new Map();\n');
+  repo.commit();
+  const error = /Related symbol name not found on source line: cache at src\/cache\.mjs:1/;
+  const result = repo.validate();
+  status(result, 1);
+  assert.match(result.stderr, error);
+  const hook = repo.hook();
+  status(hook, 1);
+  assert.match(hook.stderr, error);
+  const audit = repo.audit();
+  auditResult(audit, 2, 1);
+  assert.match(audit.stdout, error);
 });
 
 for (const marker of ['```', '~~~~']) {
@@ -571,10 +630,10 @@ for (const objectFormat of ['sha1', 'sha256']) {
     repo.write(adrPath, relatedDocument([repo.implementation, twoLineRevision],
       relatedTable(relatedRow('cache', 'src/cache.mjs', 'constant', '2'))));
     repo.commit();
-    repo.write('src/cache.mjs', 'export const cache = 1;\n');
+    repo.write('src/cache.mjs', 'export const cache = 1;\nexport const first = 2;\n');
     const workingResult = repo.validate();
     status(workingResult, 1);
-    assert.match(workingResult.stderr, /Related symbol line is outside source file/);
+    assert.match(workingResult.stderr, /Related symbol name not found on source line: cache at src\/cache\.mjs:2/);
     status(repo.validate(adrPath, ['--source-revision', twoLineRevision]), 0);
     status(repo.hook(), 0);
     auditResult(repo.audit(), 0, 0);
