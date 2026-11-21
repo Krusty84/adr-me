@@ -79,7 +79,7 @@ function fixture(t, objectFormat = 'sha1') {
   for (const folder of ['.github', '.githooks']) {
     cpSync(join(source, folder), join(repo, folder), { recursive: true });
   }
-  const config = join(repo, '.github/scripts/audit-adr.mjs');
+  const config = join(repo, '.github/scripts/adr-policy.mjs');
   writeFileSync(config, readFileSync(config, 'utf8')
     .replace(/const CODE_PATHS = .*;/, 'const CODE_PATHS = ["src/"];'));
   const git = (...args) => execFileSync('git', args, {
@@ -137,14 +137,14 @@ function status(result, expected) {
   assert.equal(result.status, expected, `${result.stdout}\n${result.stderr}`);
 }
 
-function auditResult(result, missing, invalid) {
+function auditResult(result, missing) {
   status(result, 0);
-  assert.ok(result.stdout.includes(`${missing} without ADR, ${invalid} invalid ADR(s)`), result.stdout);
+  assert.ok(result.stdout.includes(`${missing} without ADR.`), result.stdout);
   assert.ok(result.summary.includes(`Missing ADR **${missing}**`), result.summary);
-  assert.ok(result.summary.includes(`Invalid ADR **${invalid}**`), result.summary);
-  const lines = result.stdout.split('\n');
-  assert.equal(lines.filter(line => line.startsWith('::warning title=ADR missing::')).length, missing);
-  assert.equal(lines.filter(line => line.startsWith('::warning title=Invalid ADR::')).length, invalid);
+  assert.doesNotMatch(result.summary, /Invalid ADR/i);
+  const warnings = result.stdout.split('\n').filter(line => line.startsWith('::warning'));
+  assert.equal(warnings.length, missing, result.stdout);
+  for (const warning of warnings) assert.match(warning, /^::warning title=ADR missing::/);
 }
 
 for (const objectFormat of ['sha1', 'sha256']) {
@@ -155,7 +155,7 @@ for (const objectFormat of ['sha1', 'sha256']) {
       repo.commit();
       status(repo.validate(), 0);
       status(repo.hook(), 0);
-      auditResult(repo.audit(), 0, 0);
+      auditResult(repo.audit(), 0);
     });
   }
 }
@@ -176,7 +176,7 @@ for (const field of ['Status', 'Date', 'Record Type', 'Evidence']) {
       status(result, 1);
       if (variant !== 'missing') assert.ok(result.stderr.includes(`${field} must have a non-empty value`));
       status(repo.hook(), 1);
-      auditResult(repo.audit(), 1, 1);
+      auditResult(repo.audit(), 1);
     });
   }
 }
@@ -192,7 +192,7 @@ for (const [field, value] of [
     repo.commit();
     status(repo.validate(), 1);
     status(repo.hook(), 1);
-    auditResult(repo.audit(), 1, 1);
+    auditResult(repo.audit(), 1);
   });
 }
 
@@ -207,24 +207,24 @@ for (const target of ['0001-cache.md', 'missing.md']) {
     status(result, 1);
     assert.match(result.stderr, /symbolic link/i);
     status(repo.hook(), 1);
-    auditResult(repo.audit(), 0, 1);
+    auditResult(repo.audit(), 0);
   });
 }
 
 test('a later valid reference preserves earlier coverage', t => {
   const repo = fixture(t);
-  auditResult(repo.audit(), 1, 0);
+  auditResult(repo.audit(), 1);
   repo.write(adrPath, document([repo.implementation]));
   repo.commit();
-  auditResult(repo.audit(), 0, 0);
+  auditResult(repo.audit(), 0);
   const later = repo.code();
-  auditResult(repo.audit(), 1, 0);
+  auditResult(repo.audit(), 1);
   repo.write(adrPath, document([repo.implementation, later]));
   repo.commit();
   status(repo.validate(), 0);
   status(repo.hook(later), 0);
   const result = repo.audit();
-  auditResult(result, 0, 0);
+  auditResult(result, 0);
   assert.ok(!result.summary.includes(later));
   assert.ok(!result.summary.includes(repo.implementation));
 });
@@ -239,7 +239,7 @@ test('editing an existing ADR can cover new code in the push', t => {
   const result = repo.hook(before);
   status(result, 0);
   assert.ok(result.stdout.includes(later));
-  auditResult(repo.audit(), 0, 0);
+  auditResult(repo.audit(), 0);
 });
 
 test('a reference to another branch fails history checks', t => {
@@ -251,7 +251,7 @@ test('a reference to another branch fails history checks', t => {
   repo.commit();
   status(repo.validate(), 0);
   status(repo.hook(), 1);
-  auditResult(repo.audit(), 1, 1);
+  auditResult(repo.audit(), 1);
 });
 
 test('audit checks ancestry at the last ADR change', t => {
@@ -264,7 +264,7 @@ test('audit checks ancestry at the last ADR change', t => {
   repo.commit();
   repo.git('merge', '-q', '--no-ff', '-m', 'Merge side branch', 'side');
   status(repo.validate(), 0);
-  auditResult(repo.audit(), 1, 1);
+  auditResult(repo.audit(), 1);
 });
 
 for (const length of [120, 121]) {
@@ -274,7 +274,7 @@ for (const length of [120, 121]) {
     repo.commit();
     status(repo.validate(), 0);
     status(repo.hook(), 0);
-    auditResult(repo.audit(), 0, 0);
+    auditResult(repo.audit(), 0);
   });
 }
 
@@ -287,7 +287,7 @@ for (const wordCount of [350, 351]) {
     repo.commit();
     status(repo.validate(), 0);
     status(repo.hook(), 0);
-    auditResult(repo.audit(), 0, 0);
+    auditResult(repo.audit(), 0);
   });
 }
 
@@ -304,7 +304,7 @@ for (const [name, options] of [
     repo.commit();
     status(repo.validate(), 0);
     status(repo.hook(), 0);
-    auditResult(repo.audit(), 0, 0);
+    auditResult(repo.audit(), 0);
   });
 }
 
@@ -326,7 +326,7 @@ for (const [name, change, error] of [
     status(result, 1);
     assert.match(result.stderr, error);
     status(repo.hook(), 1);
-    auditResult(repo.audit(), 1, 1);
+    auditResult(repo.audit(), 1);
   });
 }
 
@@ -344,10 +344,10 @@ test('the installation guide example works with a real local push', t => {
   repo.git('init', '-q', '--bare', remote);
   repo.git('remote', 'set-url', '--push', 'origin', remote);
   status(repo.run('git', ['push', '-q', 'origin', 'main']), 0);
-  auditResult(repo.audit(), 0, 0);
+  auditResult(repo.audit(), 0);
   repo.code();
-  status(repo.run('git', ['push', '-q', 'origin', 'main']), 0);
-  auditResult(repo.audit(), 1, 0);
+  status(repo.run('env', ['ADR_ALLOW_MISSING=1', 'git', 'push', '-q', 'origin', 'main']), 0);
+  auditResult(repo.audit(), 1);
 });
 
 for (const before of ['Context', 'Decision', 'Rationale', 'Alternatives', 'Consequences',
@@ -358,7 +358,7 @@ for (const before of ['Context', 'Decision', 'Rationale', 'Alternatives', 'Conse
     repo.commit();
     status(repo.validate(), 0);
     status(repo.hook(), 0);
-    auditResult(repo.audit(), 0, 0);
+    auditResult(repo.audit(), 0);
   });
 }
 
@@ -368,7 +368,7 @@ test('accepts an empty Related Symbols section', t => {
   repo.commit();
   status(repo.validate(), 0);
   status(repo.hook(), 0);
-  auditResult(repo.audit(), 0, 0);
+  auditResult(repo.audit(), 0);
 });
 
 test('accepts a header-only Related Symbols table', t => {
@@ -377,7 +377,7 @@ test('accepts a header-only Related Symbols table', t => {
   repo.commit();
   status(repo.validate(), 0);
   status(repo.hook(), 0);
-  auditResult(repo.audit(), 0, 0);
+  auditResult(repo.audit(), 0);
 });
 
 test('accepts first and last CRLF source lines without a final newline', t => {
@@ -393,7 +393,7 @@ test('accepts first and last CRLF source lines without a final newline', t => {
   repo.commit();
   status(repo.validate(), 0);
   status(repo.hook(), 0);
-  auditResult(repo.audit(), 0, 0);
+  auditResult(repo.audit(), 0);
 });
 
 test('accepts symbols, paths, types, and aligned separators', t => {
@@ -426,7 +426,7 @@ test('accepts symbols, paths, types, and aligned separators', t => {
   repo.commit();
   status(repo.validate(), 0);
   status(repo.hook(), 0);
-  auditResult(repo.audit(), 0, 0);
+  auditResult(repo.audit(), 0);
 });
 
 test('accepts every type declared by the language catalog', t => {
@@ -442,7 +442,7 @@ test('accepts every type declared by the language catalog', t => {
   repo.commit();
   status(repo.validate(), 0);
   status(repo.hook(), 0);
-  auditResult(repo.audit(), 0, 0);
+  auditResult(repo.audit(), 0);
 });
 
 test('rejects a different case or a partial related symbol name', t => {
@@ -488,8 +488,8 @@ test('rejects a stale related symbol line within the source file through all ent
   status(hook, 1);
   assert.match(hook.stderr, error);
   const audit = repo.audit();
-  auditResult(audit, 2, 1);
-  assert.match(audit.stdout, error);
+  auditResult(audit, 2);
+  assert.doesNotMatch(audit.stdout, error);
 });
 
 for (const [forge, project, route] of [
@@ -520,7 +520,7 @@ for (const [forge, project, route] of [
     status(repo.validate(), 0);
     status(repo.validate(adrPath, ['--source-revision', currentRevision]), 0);
     status(repo.hook(), 0);
-    auditResult(repo.audit(), 0, 0);
+    auditResult(repo.audit(), 0);
 
     const historical = repo.validate(adrPath, ['--source-revision', linkedRevision]);
     status(historical, 1);
@@ -583,7 +583,7 @@ for (const marker of ['```', '~~~~']) {
     repo.commit();
     status(repo.validate(), 0);
     status(repo.hook(), 0);
-    auditResult(repo.audit(), 0, 0);
+    auditResult(repo.audit(), 0);
   });
 }
 
@@ -653,7 +653,7 @@ for (const [name, body, error] of [
     status(result, 1);
     assert.match(result.stderr, error);
     status(repo.hook(), 1);
-    auditResult(repo.audit(), 1, 1);
+    auditResult(repo.audit(), 1);
   });
 }
 
@@ -663,7 +663,7 @@ test('rejects repeated Related Symbols sections', t => {
   repo.commit();
   status(repo.validate(), 1);
   status(repo.hook(), 1);
-  auditResult(repo.audit(), 1, 1);
+  auditResult(repo.audit(), 1);
 });
 
 for (const [name, change, error] of [
@@ -695,7 +695,7 @@ for (const objectFormat of ['sha1', 'sha256']) {
     status(repo.validate(), 1);
     status(repo.validate(adrPath, ['--source-revision', repo.implementation]), 0);
     status(repo.hook(), 0);
-    auditResult(repo.audit(), 0, 0);
+    auditResult(repo.audit(), 0);
     const result = repo.validate(adrPath, ['--source-revision', repo.base]);
     status(result, 1);
     assert.match(result.stderr, /Source file does not exist with exact case/);
@@ -714,7 +714,7 @@ for (const objectFormat of ['sha1', 'sha256']) {
     assert.match(workingResult.stderr, /Related symbol name not found on source line: cache at src\/cache\.mjs:2/);
     status(repo.validate(adrPath, ['--source-revision', twoLineRevision]), 0);
     status(repo.hook(), 0);
-    auditResult(repo.audit(), 0, 0);
+    auditResult(repo.audit(), 0);
     const revisionResult = repo.validate(adrPath, ['--source-revision', repo.implementation]);
     status(revisionResult, 1);
     assert.match(revisionResult.stderr, /Related symbol line is outside source file/);
@@ -729,7 +729,7 @@ test('committed source deletion is not hidden by an untracked file', t => {
   repo.write('src/cache.mjs', 'export const cache = new Map();\n');
   status(repo.validate(), 0);
   status(repo.hook(), 1);
-  auditResult(repo.audit(), 2, 1);
+  auditResult(repo.audit(), 2);
 });
 
 test('multiple ADRs can reference the same symbol', t => {
@@ -740,7 +740,7 @@ test('multiple ADRs can reference the same symbol', t => {
   repo.commit();
   status(repo.validate(), 0);
   status(repo.hook(), 0);
-  auditResult(repo.audit(), 0, 0);
+  auditResult(repo.audit(), 0);
 });
 
 test('source revision requires a full local commit SHA', t => {

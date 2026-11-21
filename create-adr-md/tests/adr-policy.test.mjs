@@ -41,7 +41,7 @@ function fixture(t, { objectFormat = 'sha1', codePaths = [] } = {}) {
   for (const folder of ['create-adr-md', '.github', '.githooks']) {
     cpSync(join(source, folder), join(repo, folder), { recursive: true });
   }
-  const config = join(repo, '.github/scripts/audit-adr.mjs');
+  const config = join(repo, '.github/scripts/adr-policy.mjs');
   writeFileSync(config, readFileSync(config, 'utf8')
     .replace(/const CODE_PATHS = .*;/, `const CODE_PATHS = ${JSON.stringify(codePaths)};`));
   const env = Object.fromEntries(Object.entries(process.env)
@@ -55,8 +55,8 @@ function fixture(t, { objectFormat = 'sha1', codePaths = [] } = {}) {
   const git = (...args) => execFileSync('git', args, {
     cwd: repo, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
-  const run = (command, args, options = {}) => spawnSync(command, args, {
-    cwd: repo, env, encoding: 'utf8', ...options,
+  const run = (command, args, { env: overrides, ...options } = {}) => spawnSync(command, args, {
+    cwd: repo, env: { ...env, ...overrides }, encoding: 'utf8', ...options,
   });
   const write = (path, content) => {
     const target = join(repo, path);
@@ -78,9 +78,10 @@ function fixture(t, { objectFormat = 'sha1', codePaths = [] } = {}) {
     write(path, `export const value = ${++value};\n`);
     return commit();
   };
-  const hook = (before = base) => {
+  const hook = (before = base, allowMissing = '') => {
     const result = run(join(repo, '.githooks/pre-push'), ['origin'], {
       input: `refs/heads/main ${git('rev-parse', 'HEAD')} refs/heads/main ${before}\n`,
+      detached: true, env: { ADR_ALLOW_MISSING: allowMissing },
     });
     assert.deepEqual(readdirSync(snapshots), [], 'Hook removes its snapshots');
     return result;
@@ -89,7 +90,7 @@ function fixture(t, { objectFormat = 'sha1', codePaths = [] } = {}) {
     const summaryPath = join(directory, 'summary.md');
     writeFileSync(summaryPath, '');
     const result = run(process.execPath, ['.github/scripts/audit-adr.mjs'], {
-      env: { ...env, GITHUB_REPOSITORY: 'example/adr-policy', GITHUB_STEP_SUMMARY: summaryPath },
+      env: { GITHUB_REPOSITORY: 'example/adr-policy', GITHUB_STEP_SUMMARY: summaryPath },
     });
     assert.deepEqual(readdirSync(snapshots), [], 'Audit removes its snapshots');
     return { ...result, summary: readFileSync(summaryPath, 'utf8') };
@@ -102,12 +103,12 @@ function status(result, expected) {
   assert.equal(result.status, expected, `${result.stdout}\n${result.stderr}`);
 }
 
-function auditWarnings(result, invalid = 0, missing = 0) {
+function auditWarnings(result, missing = 0) {
   status(result, 0);
   const warnings = result.stdout.split('\n').filter(line => line.startsWith('::warning'));
-  assert.equal(warnings.length, invalid + missing, result.stdout);
-  assert.equal(warnings.filter(line => line.startsWith('::warning title=Invalid ADR::')).length, invalid);
-  assert.equal(warnings.filter(line => line.startsWith('::warning title=ADR missing::')).length, missing);
+  assert.equal(warnings.length, missing, result.stdout);
+  for (const warning of warnings) assert.match(warning, /^::warning title=ADR missing::/);
+  assert.doesNotMatch(result.summary, /Invalid ADR/i);
   if (missing > 0) assert.ok(result.summary.includes(`Missing ADR **${missing}**`), result.summary);
 }
 
@@ -134,19 +135,26 @@ test('the validator CLI preserves success, validation, and usage exit codes', t 
   status(repo.run(process.execPath, [args[0], '--help']), 0);
 });
 
-test('code without ADR passes, including root files and merge commits', t => {
+test('hook and audit report uncovered code commits and skip merges', t => {
   const repo = fixture(t, { codePaths: ['main.swift', 'Sources/', 'src/'] });
-  repo.code('main.swift');
+  const rootFile = repo.code('main.swift');
   repo.git('checkout', '-qb', 'side');
-  repo.code('Sources/cache.mjs');
+  const side = repo.code('Sources/cache.mjs');
   repo.git('checkout', '-q', 'main');
-  repo.code();
-  repo.git('merge', '-q', '--no-ff', '-m', 'Merge code', 'side');
-  status(repo.hook(), 0);
+  const main = repo.code();
+  repo.git('merge', '-q', '--no-ff', '-s', 'ours', '-m', 'Merge side history', 'side');
+  const merge = repo.git('rev-parse', 'HEAD');
+  const hook = repo.hook();
+  status(hook, 1);
   const audit = repo.audit();
-  auditWarnings(audit, 0, 3);
+  auditWarnings(audit, 3);
   assert.match(audit.summary, /Scanned \*\*4\*\* recent non-merge commits/);
-  assert.ok(!audit.summary.includes(repo.git('rev-parse', 'HEAD')));
+  for (const sha of [rootFile, side, main]) {
+    assert.ok(hook.stderr.includes(sha), hook.stderr);
+    assert.ok(audit.summary.includes(sha), audit.summary);
+  }
+  assert.ok(!hook.stderr.includes(merge), hook.stderr);
+  assert.ok(!audit.summary.includes(merge), audit.summary);
 });
 
 for (const objectFormat of ['sha1', 'sha256']) {
@@ -168,7 +176,7 @@ for (const objectFormat of ['sha1', 'sha256']) {
 }
 
 test('invalid added or modified ADR blocks push, but a final correction passes', t => {
-  const repo = fixture(t);
+  const repo = fixture(t, { codePaths: ['src/'] });
   const implementation = repo.code();
   const valid = document([implementation]);
   repo.write(adrPath, valid.replace('**Status:** Accepted\n', ''));
@@ -184,16 +192,16 @@ test('invalid added or modified ADR blocks push, but a final correction passes',
 });
 
 test('unchanged invalid ADRs and ADR deletion do not block code', t => {
-  const repo = fixture(t);
+  const repo = fixture(t, { codePaths: ['src/'] });
   repo.write(adrPath, '# Old document\n');
   const before = repo.commit();
   repo.code();
-  status(repo.hook(before), 0);
+  status(repo.hook(before, '1'), 0);
   auditWarnings(repo.audit(), 1);
   rmSync(join(repo.repo, adrPath));
   repo.code('main.swift');
-  status(repo.hook(before), 0);
-  auditWarnings(repo.audit());
+  status(repo.hook(before, '1'), 0);
+  auditWarnings(repo.audit(), 1);
 });
 
 test('first publication validates all ADRs in the final tree', t => {
@@ -211,7 +219,7 @@ test('first publication validates all ADRs in the final tree', t => {
 });
 
 test('links must precede the last ADR change even after merging their branch', t => {
-  const repo = fixture(t);
+  const repo = fixture(t, { codePaths: ['src/'] });
   const implementation = repo.code();
   repo.git('checkout', '-qb', 'side');
   const side = repo.code();
@@ -221,12 +229,12 @@ test('links must precede the last ADR change even after merging their branch', t
   status(repo.hook(), 1);
   repo.git('merge', '-q', '--no-ff', '-m', 'Merge side', 'side');
   status(repo.hook(), 1);
-  auditWarnings(repo.audit(), 1);
+  auditWarnings(repo.audit(), 2);
 });
 
 for (const reason of ['unknown commit', 'remote mismatch']) {
   test(`changed ADR rejects ${reason}`, t => {
-    const repo = fixture(t);
+    const repo = fixture(t, { codePaths: ['src/'] });
     const implementation = repo.code();
     const text = reason === 'unknown commit'
       ? document(['f'.repeat(implementation.length)])
@@ -238,27 +246,32 @@ for (const reason of ['unknown commit', 'remote mismatch']) {
   });
 }
 
-test('relative root files and arbitrary directories produce non-blocking warnings', t => {
+test('only uncovered commits in configured paths produce warnings', t => {
   const repo = fixture(t, { codePaths: ['main.swift', 'Sources/'] });
   const linked = repo.code('main.swift');
   const review = repo.code('Sources/cache.mjs');
   const excluded = repo.code('other/main.mjs');
   repo.write(adrPath, document([linked]));
   repo.commit();
-  status(repo.hook(), 0);
+  const hook = repo.hook();
+  status(hook, 1);
+  assert.deepEqual(hook.stderr.split('\n').filter(line => line.startsWith('WARNING:')),
+    [`WARNING: No valid ADR links to code commit ${review}`]);
   const audit = repo.audit();
-  auditWarnings(audit, 0, 1);
+  auditWarnings(audit, 1);
   const warning = audit.stdout.split('\n').find(line => line.startsWith('::warning title=ADR missing::'));
+  const url = `https://github.com/example/adr-policy/commit/${review}`;
   assert.ok(warning.includes(review), warning);
-  assert.ok(warning.includes(`https://github.com/example/adr-policy/commit/${review}`), warning);
-  assert.ok(audit.summary.includes(review), audit.summary);
+  assert.ok(warning.includes(url), warning);
+  assert.ok(audit.summary.includes(`](${url})`), audit.summary);
   assert.ok(!audit.summary.includes(linked), audit.summary);
   assert.ok(!audit.summary.includes(excluded), audit.summary);
 });
 
 test('bundled code paths include scripts, hooks, and tests', t => {
   const repo = fixture(t);
-  repo.write('.github/scripts/audit-adr.mjs', readFileSync(join(source, '.github/scripts/audit-adr.mjs'), 'utf8'));
+  const config = '.github/scripts/adr-policy.mjs';
+  repo.write(config, readFileSync(join(source, config), 'utf8'));
   const commits = [
     '.github/scripts/probe.mjs', '.githooks/probe',
     'create-adr-md/scripts/probe.mjs', 'create-adr-md/tests/probe.test.mjs',
@@ -266,19 +279,25 @@ test('bundled code paths include scripts, hooks, and tests', t => {
   repo.write('docs/notes.md', 'Documentation only.\n');
   const documentation = repo.commit();
   const audit = repo.audit();
-  auditWarnings(audit, 0, 5);
+  auditWarnings(audit, 5);
+  const hook = repo.hook('0'.repeat(repo.base.length));
+  status(hook, 1);
   for (const sha of [repo.base, ...commits]) assert.ok(audit.summary.includes(sha), sha);
+  for (const sha of [repo.base, ...commits]) assert.ok(hook.stderr.includes(sha), sha);
   assert.ok(!audit.summary.includes(documentation), audit.summary);
 });
 
-test('audit scans only the last 30 non-merge commits', t => {
+test('audit scans the last 30 non-merge commits and the first push scans all commits', t => {
   const repo = fixture(t, { codePaths: ['src/'] });
   const commits = Array.from({ length: 31 }, () => repo.code());
   const audit = repo.audit();
-  auditWarnings(audit, 0, 30);
+  auditWarnings(audit, 30);
   assert.match(audit.summary, /Scanned \*\*30\*\* recent non-merge commits/);
   assert.ok(!audit.summary.includes(commits[0]), audit.summary);
   for (const sha of commits.slice(1)) assert.ok(audit.summary.includes(sha), sha);
+  const hook = repo.hook('0'.repeat(repo.base.length));
+  status(hook, 1);
+  for (const sha of commits) assert.ok(hook.stderr.includes(sha), sha);
 });
 
 for (const codePaths of [[], null, 'src/', [''], ['/tmp/code'], ['../src/']]) {
@@ -289,7 +308,7 @@ for (const codePaths of [[], null, 'src/', [''], ['/tmp/code'], ['../src/']]) {
     repo.commit();
     status(repo.hook(), 1);
     const audit = repo.audit();
-    auditWarnings(audit, 1);
+    auditWarnings(audit);
     assert.match(audit.summary, /Review hints skipped: CODE_PATHS/);
     repo.write(adrPath, document([implementation]));
     repo.commit();
@@ -311,17 +330,48 @@ test('hook and audit use the committed ADR rather than working tree edits', t =>
   auditWarnings(repo.audit());
 });
 
-test('a real local push accepts code and rejects only the final malformed ADR', t => {
-  const repo = fixture(t);
+test('real pushes use the advertised remote tip and the pushed tree', t => {
+  const repo = fixture(t, { codePaths: ['main.swift'] });
   const remote = join(repo.directory, 'remote.git');
   repo.git('init', '-q', '--bare', remote);
   repo.git('remote', 'set-url', '--push', 'origin', remote);
+  const push = (ref = 'main', allowMissing = '') => repo.run('git', ['push', '-q', 'origin', ref], {
+    input: 'yes\n', detached: true, env: { ADR_ALLOW_MISSING: allowMissing },
+  });
+  const remoteTip = () => repo.git('--git-dir', remote, 'rev-parse', 'refs/heads/main');
   const implementation = repo.code('main.swift');
-  status(repo.run('git', ['push', '-q', 'origin', 'main']), 0);
-  repo.write(adrPath, '# Invalid ADR\n');
+  const denied = push();
+  status(denied, 1);
+  assert.ok(denied.stderr.includes(implementation), denied.stderr);
+  assert.match(denied.stderr, /ADR_ALLOW_MISSING=1 git push/);
+  status(push('main', '1'), 0);
+  assert.equal(remoteTip(), implementation);
+
+  repo.git('update-ref', 'refs/remotes/origin/main', repo.base);
+  const later = repo.code('main.swift');
+  repo.git('checkout', '-qb', 'with-adr');
+  repo.write(adrPath, document([later]));
+  const documented = repo.commit();
+  const older = push('main', '0');
+  status(older, 1);
+  assert.deepEqual(older.stderr.split('\n').filter(line => line.startsWith('WARNING:')),
+    [`WARNING: No valid ADR links to code commit ${later}`]);
+  assert.equal(remoteTip(), implementation);
+
+  repo.git('checkout', '-q', 'main');
+  repo.write(adrPath, '# Uncommitted invalid ADR\n');
+  const accepted = push('with-adr:main');
+  status(accepted, 0);
+  assert.doesNotMatch(accepted.stderr, /WARNING:/);
+  assert.equal(remoteTip(), documented);
+
+  rmSync(join(repo.repo, adrPath));
+  repo.git('merge', '-q', '--ff-only', 'with-adr');
+  repo.code('main.swift');
+  repo.write(adrPath, '# Invalid changed ADR\n');
   repo.commit();
-  status(repo.run('git', ['push', '-q', 'origin', 'main']), 1);
-  repo.write(adrPath, document([implementation]));
-  repo.commit();
-  status(repo.run('git', ['push', '-q', 'origin', 'main']), 0);
+  const invalid = push('main', '1');
+  status(invalid, 1);
+  assert.match(invalid.stderr, /ADR CHECK FAILED: docs\/adr\/0001-cache\.md/);
+  assert.equal(remoteTip(), documented);
 });

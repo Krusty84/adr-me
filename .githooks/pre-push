@@ -1,5 +1,5 @@
 #!/bin/sh
-# Check added and changed ADRs in a direct push to main.
+# Check ADRs in a direct push to main.
 set -eu
 
 remote_name="${1:-origin}"
@@ -9,5 +9,20 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   BASE_SHA="$remote_sha" \
   HEAD_SHA="$local_sha" \
   ADR_REMOTE="$remote_name" \
-    node .github/scripts/check-adr.mjs || exit 1
+    node .github/scripts/check-adr.mjs && continue
+  [ "$?" -eq 2 ] || exit 1
+  [ "${ADR_ALLOW_MISSING:-}" = 1 ] && continue
+
+  if {
+    printf 'Push without ADRs for these commits? [y/N] ' >&3
+    IFS= read -r answer <&3 || exit 1
+    case "$answer" in
+      y|yes) ;;
+      *) exit 1 ;;
+    esac
+  } 2>/dev/null 3<>/dev/tty; then
+    continue
+  fi
+  printf '%s\n' 'No terminal. To confirm missing ADRs, retry with ADR_ALLOW_MISSING=1 git push …' >&2
+  exit 1
 done

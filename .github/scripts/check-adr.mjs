@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-// Validate added and changed ADRs in the final tree pushed to main.
+// Validate changed ADRs and check new code commits in the tree pushed to main.
 
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { codePathspecs, missingAdrCommits } from "./adr-policy.mjs";
 import {
   gitList,
   isAncestor,
@@ -62,12 +63,26 @@ function main() {
     "--",
     ADR_PATH,
   ).filter((path) => path.endsWith(".md"));
-  const adrs = validateAdrs(after, changed);
-  for (const { path, links, errors } of adrs) {
+  const range = before === zero ? after : `${before}..${after}`;
+  const commits = codePathspecs?.length
+    ? execFileSync(
+      "git",
+      ["rev-list", "--no-merges", "--full-history", range, "--", ...codePathspecs],
+      { encoding: "utf8", maxBuffer: Infinity },
+    ).trim().split("\n").filter(Boolean)
+    : [];
+  const adrs = validateAdrs(after, commits.length > 0 ? undefined : changed);
+  const changedPaths = new Set(changed);
+  const checked = changed ? adrs.filter(({ path }) => changedPaths.has(path)) : adrs;
+  for (const { path, links, errors } of checked) {
     if (errors.length > 0) fail(`${path} at ${after}:\n${errors.join("\n")}`);
     for (const linked of links) console.log(`ADR link OK: ${path} -> ${linked}`);
   }
-  console.log(`ADR OK: ${adrs.length} ADR(s) checked.`);
+  console.log(`ADR OK: ${checked.length} ADR(s) checked.`);
+
+  const missing = missingAdrCommits(commits, adrs);
+  for (const sha of missing) console.warn(`WARNING: No valid ADR links to code commit ${sha}`);
+  if (missing.length > 0) process.exitCode = 2; // The hook asks for confirmation.
 }
 
 try {

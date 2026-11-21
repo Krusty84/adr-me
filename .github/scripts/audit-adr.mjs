@@ -7,15 +7,12 @@
 // Informational ADR audit. Requires a full Git checkout (fetch-depth: 0).
 
 import { appendFileSync } from "node:fs";
-import { isAbsolute } from "node:path";
+import { codePathspecs, missingAdrCommits } from "./adr-policy.mjs";
 import {
   git,
   gitList,
   validateAdrs,
 } from "../../create-adr-md/scripts/validate-adr.mjs";
-
-// Repository-relative code paths. Set these for each target repository.
-const CODE_PATHS = [".github/scripts/", ".githooks/", "create-adr-md/scripts/", "create-adr-md/tests/"];
 
 function warning(title, message) {
   const escaped = message
@@ -45,7 +42,7 @@ function changedCode(sha) {
       "-z",
       sha,
       "--",
-      ...CODE_PATHS.map((path) => `:(literal)${path}`),
+      ...codePathspecs,
     ).length > 0
   );
 }
@@ -63,40 +60,21 @@ function main() {
   if (!repo || !/^[^/]+\/[^/]+$/.test(repo))
     throw new Error("GITHUB_REPOSITORY must be OWNER/REPO");
   const commitPrefix = `${server}/${repo}/commit/`;
-  const referenced = new Set();
-  const invalid = [];
   let missing = 0;
 
-  for (const { path, links, errors } of validateAdrs("HEAD")) {
-    if (errors.length > 0) {
-      invalid.push({ path, errors });
-      warning("Invalid ADR", `${path}\n${errors.join("\n")}`);
-      continue;
-    }
-    for (const linked of links) referenced.add(linked);
-  }
-
-  const lines = [
-    "## ADR audit",
-    "",
-    `Invalid ADR **${invalid.length}**.`,
-    "",
-  ];
-  const reviewEnabled = Array.isArray(CODE_PATHS) && CODE_PATHS.length > 0 &&
-    CODE_PATHS.every((path) => typeof path === "string" && path.trim().length > 0 &&
-      !isAbsolute(path) && !path.split(/[\\/]/).includes(".."));
-  if (reviewEnabled) {
+  const lines = ["## ADR audit", ""];
+  if (codePathspecs?.length) {
     const commits = git("rev-list", "--no-merges", `--max-count=${limit}`, "HEAD")
       .split("\n")
       .filter(Boolean);
-    const review = commits.filter((sha) => changedCode(sha) && !referenced.has(sha));
+    const review = missingAdrCommits(commits.filter(changedCode), validateAdrs("HEAD"));
     missing = review.length;
     lines.push(
       "### Changes to review",
       "",
       `Missing ADR **${missing}**.`,
       "",
-      `Scanned **${commits.length}** recent non-merge commits in the configured paths.`,
+      `Scanned **${commits.length}** recent non-merge commits for changes in CODE_PATHS.`,
       "These commits have no link from a valid ADR. An ADR is optional.",
       "",
     );
@@ -110,30 +88,18 @@ function main() {
     if (review.length === 0) lines.push("No changes to review in this scan.");
     lines.push("");
   } else {
-    const note = Array.isArray(CODE_PATHS) && CODE_PATHS.length === 0
+    const note = codePathspecs
       ? "Review hints skipped: CODE_PATHS is not configured."
       : "Review hints skipped: CODE_PATHS must be a list of relative file or directory paths.";
     lines.push(note, "");
     console.log(note);
-  }
-  if (invalid.length > 0) {
-    lines.push("### Invalid ADRs", "", "| File | Errors |", "| --- | --- |");
-    for (const { path, errors } of invalid) {
-      const file = path.replace(/\|/g, "\\|").replace(/[\r\n]/g, " ");
-      const message = errors
-        .join(" ")
-        .replace(/[\r\n]/g, " ")
-        .replace(/\|/g, "\\|");
-      lines.push(`| ${file} | ${message} |`);
-    }
-    lines.push("");
   }
   lines.push(
     "Each ADR uses the create-adr-md template with URL bullets under `## Implementation Commit`.",
     "Warnings keep this GitHub Actions job successful.",
   );
   summary(lines);
-  console.log(`ADR audit: ${missing} without ADR, ${invalid.length} invalid ADR(s).`);
+  console.log(`ADR audit: ${missing} without ADR.`);
 }
 
 try {
