@@ -19,6 +19,9 @@ const diagram = (source, fence = '```') => `${fence}plantuml\n${source}${fence}`
 function document(path = archPath) {
   const sourceLink = `[${sourcePath}:1](${relative(dirname(path), sourcePath)}#L1)`;
   const contents = [
+    'Cache',
+    'Agent-Session',
+    'Agent Session',
     `The service stores a cached value. ${sourceLink}`,
     'The operator calls the service.',
     diagram(contextSource),
@@ -171,7 +174,13 @@ test('validates an independently installed skill and both diagram inputs', t => 
 });
 
 for (const [name, change, error] of [
-  ['title', text => text.replace('# Architecture', '# Other'), /First line must be/],
+  ['title', text => text.replace('# ARCHITECTURE: Cache', '# Other: Cache'), /First line must be/],
+  ['empty title', text => text.replace('# ARCHITECTURE: Cache', '# ARCHITECTURE:'), /First line must be/],
+  ['whitespace title', text => text.replace('# ARCHITECTURE: Cache', '# ARCHITECTURE: \t '), /First line must be/],
+  ['title spacing', text => text.replace('# ARCHITECTURE: Cache', '# ARCHITECTURE:  Cache'), /First line must be/],
+  ['old title prefix', text => text.replace('# ARCHITECTURE: Cache', '# ARCH: Cache'), /First line must be/],
+  ['template title', text => text.replace('# ARCHITECTURE: Cache', '# ARCHITECTURE: <Short title>'),
+    /Document header contains a placeholder/],
   ['LF', text => text.replaceAll('\n', '\r\n'), /Use LF line endings/],
   ['missing section', text => text.replace('## Data and state\n', ''), /Sections must appear exactly once/],
   ['duplicate section', text => `${text}\n## Overview\n\nDuplicate.\n`, /Sections must appear exactly once/],

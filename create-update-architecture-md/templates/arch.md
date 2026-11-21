@@ -1,4 +1,4 @@
-# ARCH:  <Short title>
+# ARCHITECTURE: <Short title>
 
 **Status:** Accepted
 **Date:** YYYY-MM-DD

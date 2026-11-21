@@ -330,11 +330,11 @@ for (const [name, change, error] of [
   });
 }
 
-test('the installation guide example works with a real local push', t => {
+test('the README example works with a real local push', t => {
   const repo = fixture(t);
-  const guide = readFileSync(join(packagePath, 'about.txt'), 'utf8');
+  const guide = readFileSync(join(source, 'README.md'), 'utf8');
   const example = guide.match(/```markdown\n([\s\S]*?)\n```/);
-  assert.ok(example, 'Installation guide contains a complete ADR example');
+  assert.ok(example, 'README contains a complete ADR example');
   const path = 'docs/adr/0042-cache-sync.md';
   repo.write(path, example[1].replace('OWNER/REPO', 'example/adr-tests')
     .replace('0123456789abcdef0123456789abcdef01234567', repo.implementation) + '\n');

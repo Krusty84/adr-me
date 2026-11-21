@@ -12,7 +12,6 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const TEMPLATE = readFileSync(new URL("../templates/arch.md", import.meta.url), "utf8");
-const TITLE = TEMPLATE.split("\n")[0];
 const SECTIONS = [...TEMPLATE.matchAll(/^## (.+)$/gm)].map((match) => match[1]);
 const TEMPLATE_PLACEHOLDERS = TEMPLATE.match(/<[^<>\n]+>/g) ?? [];
 const DIAGRAM_SECTIONS = ["System context", "System components"];
@@ -294,7 +293,8 @@ function main() {
   const text = readFileSync(file, "utf8");
   if (text.includes("\r")) fail("Use LF line endings");
   const lines = text.replace(/\n$/, "").split("\n");
-  if (lines[0] !== TITLE) fail(`First line must be ${TITLE}`);
+  if (!/^# ARCHITECTURE: \S.*$/.test(lines[0]))
+    fail("First line must be # ARCHITECTURE: Short title");
   const { visible, headers, bodies, blocks } = readSections(lines);
   visible.forEach((line, index) => {
     if (index > 0 && /^#{1,6} /.test(line) && !/^## /.test(line))

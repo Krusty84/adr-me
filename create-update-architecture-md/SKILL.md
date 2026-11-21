@@ -1,13 +1,13 @@
 ---
 name: create-update-architecture-md
-description: Use when the task is to create or update an ARCHITECTURE.md document that explains system structure, key modules, data flow, and major technical decisions. Do not use for lightweight README edits or changelog work.
+description: Use when the user asks to create or update an ARCHITECTURE.md document.
 ---
 
 If this skill is used,say:SKILL_CR_UPD_ARCH_LOADED
 
 ## Goal
 
-Explain the current system to engineers who are new to the repository.
+Explain the current system (system structure, key modules, data flow, major technical decisions) to engineers who are new to the repository.
 
 ## Files
 
@@ -23,14 +23,14 @@ Use the template without adding, deleting, renaming, or reordering its attribute
 - Write in ASD-STE100, Issue 9. Use its approved vocabulary and writing rules where applicable. Keep established code terms, API names, and identifiers unchanged.
 - Be so brief every word you write costs you $1,000.
 - Describe the current structure and behavior. Check the code, tests, and relevant build or runtime configuration. Use existing documentation and user notes to clarify facts.
-- Give reasons for design decisions when they are documented. Use applicable ADRs in `docs/adr/` and other verified sources. Keep the text brief and refer to the README for general usage.
+- Give reasons for design decisions when they are documented. Use applicable ADRs in `docs/adr/` and other verified sources. Keep the text brief and refer to the README.md for general usage.
 - State verifiable facts. Do not invent the task, intent, reasons, alternatives, risks, or outcomes.
 
 ## Fixed document contract
 
 Use the required heading and attribute order in `templates/arch.md`:
 
-1. `# ARCH: Title`
+1. `# ARCHITECTURE: Title`
 2. `**Date:** YYYY-MM-DD`
 3. `**Record Type:** Agent-Session | Retrospective` (choose one)
 4. `**Evidence:** Agent Session | Git History | Manual | Mixed` (choose one)
@@ -81,21 +81,6 @@ Use **Update** for an existing `ARCHITECTURE.md` and **Create** for a new docume
 - Put each diagram in its own top-level CommonMark fenced code block. Use matching backtick or tilde fences and set the info string to `plantuml` in any letter case. Put the explanation next to the diagram in a separate paragraph.
 - Put exactly one `@startuml` and one `@enduml` around each diagram. Use built-in PlantUML syntax and omit external directives such as `!include`, `!includeurl`, `!include_once`, `!include_many`, and `!import`. Deliver the diagrams as embedded Markdown source only.
 
-## Completion checks
-
-Resolve `scripts/validate-arch.mjs` relative to this `SKILL.md`. Run it from the target repository root after each document change.
-
-```sh
-node "<skill-directory>/scripts/validate-arch.mjs" docs/ARCHITECTURE.md --repo .
-```
-
-For an existing document, pass its current path. The validator requires Node.js 18+ and a local Git worktree. It checks the template structure, placeholders, source paths and lines, and PlantUML blocks.
-
-1. Correct all validation errors and repeat the check until it passes. Exit code `1` means document errors. Exit code `2` means invalid arguments or an unavailable Git worktree.
-2. The validator uses `plantuml` from `PATH` to check each diagram through stdin in `-syntax` mode. It uses the installed version and warns if the version is older or unknown. PlantUML 1.2026.4 or newer is recommended.
-3. If PlantUML is unavailable, the validator continues the document checks and warns that diagram syntax validation was skipped. Report the warning and suggest a future installation of PlantUML 1.2026.4 or newer. Warnings allow exit code `0` when the document checks pass.
-4. Review the facts, source lines, and English prose for ASD-STE100 compliance.
-
 ## Validation (mandatory)
 
 The validator is part of this skill:
@@ -108,18 +93,38 @@ The validator is part of this skill:
 2. Resolve `scripts/validate-arch.mjs` relative to that directory.
 3. Find the root of the target Git repository.
 4. Run the validator from the repository root.
-5. Pass the ARCHITECTURE.md path, repository root.
+5. Pass the `ARCHITECTURE.md` path and repository root with `--repo`. For an existing document, use its current path.
 6. Do not assume a fixed skill installation path.
 7. Do not use a validator from another skill installation.
 
 The skill can be installed globally or inside a repository.
 
+```sh
+node "<skill-directory>/scripts/validate-arch.mjs" docs/ARCHITECTURE.md --repo .
+```
+
 ### Validation Rules
 
 The validator checks:
 
-- ARCHITECTURE.md path, filename, and ID.
-- Required attributes and allowed values.
-- Required section structure and order, with at most one optional `Related Symbols` section.
-- Required content and valid dates.
-- Unfilled fields from the bundle
+- ARCHITECTURE.md existence and location inside the Git repository. Symbolic links are rejected.
+- Exact title, section headings, and section order from the bundled template.
+- Non-empty required sections.
+- Unfilled fields from the bundled template.
+- LF line endings.
+- Source link syntax, matching displayed and target paths, and matching line numbers.
+- Source files inside the repository, exact path case, and source line bounds.
+- Required PlantUML blocks, section placement, top-level fences, start and end markers, meaningful content, and absence of external directives.
+
+The validator uses `plantuml` from `PATH` to check each diagram through stdin in `-syntax` mode. It uses the installed version.
+
+If PlantUML is unavailable, the validator continues the document checks and warns that diagram syntax validation was skipped.
+
+### Completion Requirements
+
+1. Run validation after each ARCHITECTURE.md change.
+2. Correct all errors.
+3. Repeat validation until it passes.
+4. Review factual accuracy and ASD-STE100 compliance.
+5. Check for ambiguous links.
+6. Report warnings. If diagram syntax validation was skipped, state this and suggest installation of the lastest PlantUML version. Warnings allow exit code `0` when the document checks pass.
