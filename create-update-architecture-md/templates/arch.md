@@ -1,4 +1,9 @@
-# Architecture
+# ARCH:  <Short title>
+
+**Status:** Accepted
+**Date:** YYYY-MM-DD
+**Record Type:** <Agent-Session | Retrospective>
+**Evidence:** <Agent Session | Git History | Manual | Mixed>
 
 ## Overview
 

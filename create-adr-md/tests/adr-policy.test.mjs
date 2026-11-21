@@ -12,7 +12,7 @@ const template = readFileSync(join(source, 'create-adr-md/templates/adr.md'), 'u
 const relatedSymbolsTemplate = '## Related Symbols\n\n' +
   '| Symbol | File | Type | Lines |\n|---|---|---|---|\n' +
   '| `<QualifiedName>` | `<repository-relative-path>` | <type-from-types.md> | ' +
-  '[<line-number>](<line-permalink>) |\n\n';
+  '[<repository-relative-path>:<line-number>](<relative-source-path>#L<line-number>) |\n\n';
 
 function document(links, recordType = 'Agent-Session') {
   return template

@@ -7,7 +7,7 @@ If this skill is used,say:SKILL_CR_UPD_ADR_LOADED
 
 ## Goal
 
-Record an Architecture Decision Record (ADR) and link it to its implementation commit.An ADR records **why** a solution was selected, not a transcript or a change log. Use one ADR per decision, one decision can span multiple implementation commits.
+Record an Architecture Decision Record (ADR) and link it to its implementation commit.An ADR records why a solution was selected, not a transcript or a change log. Use one ADR per decision, one decision can span multiple implementation commits.
 
 ## Files
 
@@ -20,9 +20,9 @@ Use the template without adding, deleting, renaming, or reordering its attribute
 
 ## Mandatory writing rules
 
-- Write **all ADR prose in English**, regardless of the agent session language.
-- **Write in ASD-STE100, Issue 9.** Use its approved vocabulary and writing rules where applicable. Keep established code terms, API names, and identifiers unchanged.
-- **Be so brief every word you write costs you $1,000.**
+- Write all ADR prose in English, regardless of the agent session language.
+- Write in ASD-STE100, Issue 9. Use its approved vocabulary and writing rules where applicable. Keep established code terms, API names, and identifiers unchanged.
+- Be so brief every word you write costs you $1,000.
 - Keep the title within 120 characters. Keep the title and the six prose sections within 350 words.
 - Use short, direct sentences, one idea per sentence, and active voice.
 - State verifiable facts. Do not invent the task, intent, reasons, alternatives, risks, or outcomes.
@@ -48,7 +48,7 @@ Use the required heading and attribute order in `templates/adr.md`:
 12. `## Related Symbols`
 13. `## Implementation Commit`
 
-The `Date` is the ADR creation date, not the implementation date. `Status: Accepted` means the user approved the **documented decision now**; it does not claim that a historical ADR existed.
+The `Date` is the ADR creation date, not the implementation date. `Status: Accepted` means the user approved the documented decision now, it does not claim that a historical ADR existed.
 
 Use `Record Type: Agent-Session` for a decision captured during implementation. Use `Retrospective` when reconstructing a decision from past work. `Evidence` identifies the principal source: `Agent Session`, `Git History`, `Manual`, or `Mixed`.
 
@@ -61,15 +61,15 @@ Do not add `Verified At` or `Scope` yet: these are reserved for a future ADR fre
 ## Mode A: Agent-Session
 
 1. Review the active agent session, the selected changes, tests, and `git diff`. Identify one technical decision and its supporting evidence.
-2. Draft the ADR **outside** `docs/adr/`, using the fixed template. Do not claim the decision was made if it was only suggested.
+2. Draft the ADR outside `docs/adr/`, using the fixed template. Do not claim the decision was made if it was only suggested.
 3. Show the draft to the user. Require explicit approval of the decision, the wording, and the intended Git commits before changing history.
-4. Commit only the approved implementation files. Do **not** include the ADR in this implementation commit. Do not stage unrelated files. Never amend, reset, rebase, force-push, or push without separate approval.
-5. Read the full implementation SHA from Git after the commit. Identify the repository web URL from a verified Git remote. Use the forge's commit URL format; do not guess unsupported hosts or project paths.
+4. Commit only the approved implementation files. Do not include the ADR in this implementation commit. Do not stage unrelated files. Never amend, reset, rebase, force-push, or push without separate approval.
+5. Read the full implementation SHA from Git after the commit. Identify the repository web URL from a verified Git remote. Use the forge's commit URL format, do not guess unsupported hosts or project paths.
 6. Create `docs/adr/NNNN-short-title.md` with the approved text, `Status: Accepted`, `Record Type: Agent-Session`, and all implementation commit URLs. If the code spans several commits, include each relevant URL.
 7. Run the bundled validator. Resolve all errors. Independently review ASD-STE100 and factual accuracy. If approval-sensitive wording changes, request approval again.
 8. Commit only the approved ADR file as a second commit. Report both commit SHAs and the ADR path. Do not push without approval.
 
-**Why two commits:** A commit contains the hash of its file tree. An ADR cannot reliably embed the SHA of the same commit that contains it.
+Why two commits: A commit contains the hash of its file tree. An ADR cannot reliably embed the SHA of the same commit that contains it.
 
 ## Mode B: Retrospective
 
@@ -83,11 +83,11 @@ Do not add `Verified At` or `Scope` yet: these are reserved for a future ADR fre
 
 ## Implementation link rules
 
-- The URL must point to the exact implementation **commit**, not a branch, tag, pull request, directory, or diff page.
+- The URL must point to the exact implementation commit, not a branch, tag, pull request, directory, or diff page.
 - Resolve the project location from a configured Git remote, not from assumptions. Ensure the SHA exists locally as a commit object.
 - Use the full SHA. Include multiple URLs when the decision spans multiple commits.
 - If the remote is missing, the web URL is unknown, or a commit cannot be verified, stop before committing the ADR. Ask the user for a verifiable repository URL or correct Git history.
-- Rebase, amend, and cherry-pick can change SHAs. After such operations, rerun validation and update affected ADR URLs in a **new** commit. A local object check does not prove that a URL is reachable on the server.
+- Rebase, amend, and cherry-pick can change SHAs. After such operations, rerun validation and update affected ADR URLs in a new commit. A local object check does not prove that a URL is reachable on the server.
 
 ## Source symbol links
 
@@ -97,20 +97,20 @@ Use the heading `## Related Symbols` at most once, after the metadata and at any
 - Use exactly the columns `Symbol`, `File`, `Type`, and `Lines`. Put `Symbol` and `File` in inline code. Use one declaration per row and no description column.
 - Use a repository-relative file path, `/` separators, and exact path and symbol case. The path must identify an existing regular file. Do not use absolute paths, `.` or `..` path segments, or call parentheses. Preserve parentheses only when they are part of an operator name such as `operator()`.
 - Set `Lines` to the 1-based line that contains the symbol name in its declaration. Use one positive decimal without leading zeros.
-- In the selected remote's web interface, select the line number and copy its permalink. Put the number and permalink in a Markdown link. Use HTTPS and the full SHA of the verified local commit. Use the same number in the link text and the `#L` fragment.
-- Use the route after the project path in the permalink. GitHub uses `/blob/`. GitLab uses `/-/blob/`, including for projects in nested groups. Both routes also work with custom hostnames that match the remote. Percent-encode spaces and special characters in each path segment. Keep `/` separators.
-- If a supported permalink is unavailable, use the number in inline code.
+- Put a relative Markdown link in `Lines`: `[<repository-relative-path>:<line-number>](<relative-source-path>#L<line-number>)`. Use the same number in the link text and the `#L` fragment. The displayed path must match `File`.
+- Resolve the link from the ADR directory. For `docs/adr/NNNN-title.md`, use `[src/main.ts:42](../../src/main.ts#L42)`. The decoded target must match `File` with exact case. Percent-encode spaces and special characters in each path segment. Keep `/` separators.
+- A number in inline code is also valid when no relative link is provided.
 - Do not repeat the same `File` and `Symbol` pair within one ADR. One ADR can link several symbols. Several ADRs can link the same symbol.
-- Update numeric rows after a file move, symbol rename, or change to the line number of the symbol name. Local variables, parameters, generic parameters, overloaded declarations, extensions, and Rust `impl` blocks need a separate disambiguation rule. Use prose mentions for them.
+- Update rows after a file move, symbol rename, or change to the line number of the symbol name. Local variables, parameters, generic parameters, overloaded declarations, extensions, and Rust `impl` blocks need a separate disambiguation rule. Use prose mentions for them.
 
 ```markdown
 ## Related Symbols
 
-| Symbol                      | File                      | Type     | Lines                                                                                                                |
-| --------------------------- | ------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
-| `PressureService.calculate` | `src/pressure/Service.ts` | method   | [42](https://forge.example/team/project/-/blob/0123456789abcdef0123456789abcdef01234567/src/pressure/Service.ts#L42) |
-| `PressureService.flowRate`  | `src/pressure/Service.ts` | property | [18](https://forge.example/team/project/-/blob/0123456789abcdef0123456789abcdef01234567/src/pressure/Service.ts#L18) |
-| `MAX_PRESSURE`              | `src/pressure/limits.ts`  | constant | [7](https://forge.example/team/project/-/blob/0123456789abcdef0123456789abcdef01234567/src/pressure/limits.ts#L7)    |
+| Symbol                      | File                      | Type     | Lines                                                                         |
+| --------------------------- | ------------------------- | -------- | ----------------------------------------------------------------------------- |
+| `PressureService.calculate` | `src/pressure/Service.ts` | method   | [src/pressure/Service.ts:42](../../src/pressure/Service.ts#L42) |
+| `PressureService.flowRate`  | `src/pressure/Service.ts` | property | [src/pressure/Service.ts:18](../../src/pressure/Service.ts#L18) |
+| `MAX_PRESSURE`              | `src/pressure/limits.ts`  | constant | [src/pressure/limits.ts:7](../../src/pressure/limits.ts#L7)     |
 ```
 
 ### Type routing
@@ -126,7 +126,7 @@ Determine the language from the file extension, source syntax, and build configu
 
 Use source syntax and build configuration when an extension is absent or ambiguous. Do not add a row for another language until `references/types.md` contains a section for it. Select `Type` only from the relevant language section.
 
-In other sections, use inline code for source names, such as `PressureService.calculate()` or `MAX_PRESSURE`. Preserve source names; include the class name for methods where possible. Call parentheses are allowed in prose. These mentions supply search candidates. A name without a path is ambiguous when declarations share that name. Exact links in `Related Symbols` take priority over inferred matches.
+In other sections, use inline code for source names, such as `PressureService.calculate()` or `MAX_PRESSURE`. Preserve source names, include the class name for methods where possible. Call parentheses are allowed in prose. These mentions supply search candidates. A name without a path is ambiguous when declarations share that name. Exact links in `Related Symbols` take priority over inferred matches.
 
 ## Validation (mandatory)
 
@@ -159,7 +159,7 @@ The validator checks:
 - Git remote identity.
 - Existence of local implementation commits.
 - Related-symbol table syntax, allowed types, duplicate file-symbol pairs, source files with exact path case, and source line bounds.
-- The remote repository, local commit, decoded file path, and line number for each line permalink. The validator reads the file at the SHA in the link.
+- The displayed path, decoded relative target, and line number for each source link. Both paths must match `File`.
 - The complete symbol name with exact case on the specified source line. For a name qualified with `.` or `::`, the validator checks the name after the qualifiers.
 
 ### Completion Requirements
@@ -172,5 +172,3 @@ The validator checks:
 6. Check for ambiguous links.
 7. Verify that implementation commit URLs open the intended commits.
 8. Do not commit an invalid ADR.
-
-Run the **same validator** in a pre-commit hook and CI to enforce the contract outside the agent. Do not treat a successful validation as user approval.

@@ -19,7 +19,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -152,26 +152,17 @@ function parseCommitURL(raw) {
     return null;
   }
 }
-function parseSourceLineLink(cell, projectDepth) {
-  const match = cell.match(/^\[([1-9]\d*)\]\((https:\/\/[^\s()<>\\|?&]+)\)$/);
+function parseSourceLineLink(cell, adrPath) {
+  const match = cell.match(/^\[(.+):([1-9]\d*)\]\(([^\s()<>\\|?&#]+)#L\2\)$/);
   if (!match) return null;
-  const [, line, raw] = match;
+  const [, file, line, raw] = match;
+  if (raw.startsWith("/") || /^[a-z][a-z0-9+.-]*:/i.test(raw)) return null;
   try {
-    const url = new URL(raw);
-    if (url.username || url.password || url.port || url.hash !== `#L${line}`)
-      return null;
-    const parts = url.pathname.slice(1).split("/");
-    const blobIndex = parts[projectDepth] === "-" ? projectDepth + 1 : projectDepth;
-    const [view, sha, ...path] = parts.slice(blobIndex);
-    if (view !== "blob" || !new RegExp(`^${SHA_PATTERN}$`, "i").test(sha) || !path.length)
-      return null;
-    const segments = [...parts.slice(0, projectDepth), ...path].map(decodeURIComponent);
+    const segments = raw.split("/").map(decodeURIComponent);
     if (segments.some((segment) => !segment || /[/\\]/.test(segment))) return null;
     return {
-      host: url.hostname,
-      project: segments.slice(0, projectDepth).join("/"),
-      sha: sha.toLowerCase(),
-      path: segments.slice(projectDepth).join("/"),
+      file,
+      path: posix.join(posix.dirname(adrPath), ...segments),
       line,
     };
   } catch {
@@ -327,7 +318,7 @@ function sourceLineContainsSymbol(line, symbol) {
   const left = prefix ? identifier : identifier + punctuation;
   return new RegExp(`(?<![${left}])${prefix}${literal}(?![${identifier}${punctuation}])`, "u").test(line);
 }
-function validateRelatedSymbols(body, root, opts, allowedTypes, remote) {
+function validateRelatedSymbols(body, root, opts, allowedTypes, adrPath) {
   if (isPlaceholder(body ?? "")) {
     fail("Related Symbols contains a placeholder");
     return;
@@ -348,7 +339,6 @@ function validateRelatedSymbols(body, root, opts, allowedTypes, remote) {
     fail("Related Symbols requires a four-column Markdown table separator");
     return;
   }
-  const projectDepth = remote?.project.split("/").length ?? 0;
   const seen = new Set();
   for (const line of lines.slice(2)) {
     const row = parseTableRow(line);
@@ -383,7 +373,7 @@ function validateRelatedSymbols(body, root, opts, allowedTypes, remote) {
       continue;
     }
     const linesMatch = row[3].match(/^`([1-9]\d*)`$/);
-    const link = linesMatch ? null : parseSourceLineLink(row[3], projectDepth);
+    const link = linesMatch ? null : parseSourceLineLink(row[3], adrPath);
     const sourceLine = Number(linesMatch?.[1] ?? link?.line);
     if (!Number.isSafeInteger(sourceLine)) {
       fail(`Invalid related symbol lines: ${row[3]}`);
@@ -392,21 +382,11 @@ function validateRelatedSymbols(body, root, opts, allowedTypes, remote) {
     const key = `${path}\0${symbol}`;
     if (seen.has(key)) fail(`Duplicate related symbol: ${path}#${symbol}`);
     seen.add(key);
-    if (link) {
-      if (!remote || link.host !== remote.host || link.project !== remote.project) {
-        fail(`Related symbol link does not match Git remote ${opts.remote}: ${row[3]}`);
-        continue;
-      }
-      if (link.path !== path) {
-        fail(`Related symbol link does not match File: ${row[3]} (expected ${path})`);
-        continue;
-      }
-      if (gitInRepo(root, "rev-parse", "--verify", `${link.sha}^{commit}`) !== link.sha) {
-        fail(`Related symbol link revision is not a local commit: ${link.sha}`);
-        continue;
-      }
+    if (link && (link.file !== path || link.path !== path)) {
+      fail(`Related symbol link does not match File: ${row[3]} (expected ${path})`);
+      continue;
     }
-    const content = readSourceFile(root, path, link?.sha ?? opts.sourceRevision);
+    const content = readSourceFile(root, path, opts.sourceRevision);
     if (content === null) {
       fail(`Source file does not exist with exact case: ${path}`);
       continue;
@@ -569,7 +549,7 @@ function main() {
   const remote = remoteUrl ? parseRemote(remoteUrl) : null;
   if (remoteUrl && !remote)
     fail(`Cannot parse Git remote ${opts.remote} as a hosted repository URL`);
-  validateRelatedSymbols(bodies.get(RELATED_SYMBOLS), root, opts, allowedSymbolTypes, remote);
+  validateRelatedSymbols(bodies.get(RELATED_SYMBOLS), root, opts, allowedSymbolTypes, rel);
 
   const impl = bodies.get("Implementation Commit") ?? "";
   const implLines = impl

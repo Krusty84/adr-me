@@ -14,10 +14,10 @@ const relatedTableHeader = '| Symbol | File | Type | Lines |\n|---|---|---|---|'
 const relatedSymbolsTemplate = '## Related Symbols\n\n' +
   `${relatedTableHeader}\n` +
   '| `<QualifiedName>` | `<repository-relative-path>` | <type-from-types.md> | ' +
-  '[<line-number>](<line-permalink>) |\n\n';
+  '[<repository-relative-path>:<line-number>](<relative-source-path>#L<line-number>) |\n\n';
 const tableCell = value => value.replaceAll('|', '\\|');
 const relatedRow = (symbol = 'cache', file = 'src/cache.mjs', type = 'constant', lines = '1', link = null) => {
-  const lineCell = link ? `[${lines}](${link})` : `\`${lines}\``;
+  const lineCell = link ? `[${tableCell(file)}:${lines}](${link})` : `\`${lines}\``;
   return `| \`${tableCell(symbol)}\` | \`${tableCell(file)}\` | ${type} | ${lineCell} |`;
 };
 const relatedTable = (rows = relatedRow()) => `${relatedTableHeader}\n${rows}`;
@@ -492,27 +492,45 @@ test('rejects a stale related symbol line within the source file through all ent
   assert.doesNotMatch(audit.stdout, error);
 });
 
+test('accepts relative related symbol links for TypeScript and Swift', t => {
+  const repo = fixture(t);
+  const entries = [
+    ['main', 'src/main.ts', '42', 'export function main() {}\n'],
+    ['decode', 'helpers/io/decode.swift', '88', 'func decode() {}\n'],
+  ];
+  for (const [, path, line, declaration] of entries) {
+    repo.write(path, '\n'.repeat(Number(line) - 1) + declaration);
+  }
+  const implementation = repo.commit();
+  const rows = entries.map(([symbol, path, line]) =>
+    relatedRow(symbol, path, 'function', line, `../../${path}#L${line}`)).join('\n');
+  repo.write(adrPath, relatedDocument([repo.implementation, implementation], relatedTable(rows)));
+  repo.commit();
+  status(repo.validate(), 0);
+  status(repo.hook(), 0);
+  auditResult(repo.audit(), 0);
+});
+
 for (const [forge, project, route] of [
   ['GitHub', 'https://github.com/example/adr-tests', ''],
   ['GitLab.com', 'https://gitlab.com/example/adr-tests', '/-'],
   ['self-managed GitLab', 'https://git.example.test/example/blob/team/adr-tests', '/-'],
 ]) {
-  test(`checks linked and numeric related symbol lines at their respective revisions on ${forge}`, t => {
+  test(`checks relative and numeric related symbol lines at the selected revision on ${forge}`, t => {
     const repo = fixture(t);
     repo.git('remote', 'set-url', 'origin', `${project}.git`);
-    const directory = `src/-/blob/${repo.implementation}`;
-    const path = `${directory}/[services]/caché #1 (old).mjs`;
-    const encodedPath = `${directory}/%5Bservices%5D/cach%C3%A9%20%231%20%28old%29.mjs`;
+    const path = 'src/[services]/caché #1 (old) % &|?.mjs';
+    const encodedPath = 'src/%5Bservices%5D/cach%C3%A9%20%231%20%28old%29%20%25%20%26%7C%3F.mjs';
     repo.write(path, 'export const primary = 0;\nexport const secondary = 1;\n');
-    const linkedRevision = repo.commit();
+    const firstRevision = repo.commit();
     repo.write(path, 'export const secondary = 1;\nexport const primary = 0;\n');
     const currentRevision = repo.commit();
-    const link = `${project}${route}/blob/${linkedRevision}/${encodedPath}#L1`;
+    const link = `../../${encodedPath}#L2`;
     const rows = [
-      relatedRow('primary', path, 'constant', '1', link),
+      relatedRow('primary', path, 'constant', '2', link),
       relatedRow('secondary', path),
     ].join('\n');
-    const adr = relatedDocument([repo.implementation, linkedRevision, currentRevision], relatedTable(rows))
+    const adr = relatedDocument([repo.implementation, firstRevision, currentRevision], relatedTable(rows))
       .replaceAll('https://github.com/example/adr-tests/commit/', `${project}${route}/commit/`);
     repo.write(adrPath, adr);
     repo.commit();
@@ -522,10 +540,16 @@ for (const [forge, project, route] of [
     status(repo.hook(), 0);
     auditResult(repo.audit(), 0);
 
-    const historical = repo.validate(adrPath, ['--source-revision', linkedRevision]);
+    const historical = repo.validate(adrPath, ['--source-revision', firstRevision]);
     status(historical, 1);
-    assert.ok(historical.stderr.includes(`Related symbol name not found on source line: secondary at ${path}:1`),
+    assert.ok(historical.stderr.includes(`Related symbol name not found on source line: primary at ${path}:2`),
       historical.stderr);
+
+    repo.write(path, 'export const primary = 0;\nexport const secondary = 1;\n');
+    status(repo.validate(), 1);
+    status(repo.validate(adrPath, ['--source-revision', currentRevision]), 0);
+    status(repo.hook(), 0);
+    auditResult(repo.audit(), 0);
   });
 }
 
@@ -538,28 +562,47 @@ test('accepts numeric related symbol lines with a non-GitHub remote', t => {
   status(repo.validate(), 0);
 });
 
-test('rejects invalid related symbol permalinks', t => {
+for (const protocol of ['http', 'https']) {
+  test(`rejects ${protocol.toUpperCase()} source links through all entry points`, t => {
+    const repo = fixture(t);
+    const link = `${protocol}://github.com/example/adr-tests/blob/${repo.implementation}/src/cache.mjs#L1`;
+    for (const label of ['1', 'src/cache.mjs:1']) {
+      const row = relatedRow().replace('`1`', `[${label}](${link})`);
+      repo.write(adrPath, relatedDocument([repo.implementation], relatedTable(row)));
+      repo.commit();
+      const result = repo.validate();
+      status(result, 1);
+      assert.match(result.stderr, /Invalid related symbol lines:/);
+      status(repo.hook(), 1);
+      auditResult(repo.audit(), 1);
+    }
+  });
+}
+
+test('rejects invalid relative related symbol links', t => {
   const repo = fixture(t);
   const path = 'src/cache.mjs';
-  const repository = 'https://github.com/example/adr-tests';
-  const sourceUrl = `${repository}/blob/${repo.implementation}`;
   const invalidLines = /Invalid related symbol lines:/;
-  const wrongRemote = /Related symbol link does not match Git remote origin:/;
-  const missingCommit = /Related symbol link revision is not a local commit:/;
-  repo.write(path, 'export const changed = 1;\n');
-  for (const [name, link, error, symbol = 'cache'] of [
-    ['host', `${sourceUrl.replace('github.com', 'git.example.test')}/${path}#L1`, wrongRemote],
-    ['project', `${sourceUrl.replace('/adr-tests/', '/different/')}/${path}#L1`, wrongRemote],
-    ['file', `${sourceUrl}/src/Cache.mjs#L1`, /Related symbol link does not match File:/],
-    ['line number', `${sourceUrl}/${path}#L2`, invalidLines],
-    ['range', `${sourceUrl}/${path}#L1-L2`, invalidLines],
-    ['branch instead of SHA', `${repository}/blob/main/${path}#L1`, invalidLines],
-    ['unknown commit', `${repository}/blob/${'f'.repeat(repo.implementation.length)}/${path}#L1`, missingCommit],
-    ['tree SHA', `${repository}/blob/${repo.git('rev-parse', 'HEAD^{tree}')}/${path}#L1`, missingCommit],
-    ['symbol', `${sourceUrl}/${path}#L1`,
-      /Related symbol name not found on source line: changed at src\/cache\.mjs:1/, 'changed'],
+  const wrongFile = /Related symbol link does not match File:/;
+  for (const [name, cell, error] of [
+    ['target file case', `[${path}:1](../../src/Cache.mjs#L1)`, wrongFile],
+    ['label file case', `[src/Cache.mjs:1](../../${path}#L1)`, wrongFile],
+    ['ADR directory', `[${path}:1](../${path}#L1)`, wrongFile],
+    ['outside repository', `[${path}:1](../../../${path}#L1)`, wrongFile],
+    ['absolute path', `[${path}:1](/${path}#L1)`, invalidLines],
+    ['protocol-relative URL', `[${path}:1](//example.test/${path}#L1)`, invalidLines],
+    ['file URL', `[${path}:1](file:///tmp/${path}#L1)`, invalidLines],
+    ['line number', `[${path}:1](../../${path}#L2)`, invalidLines],
+    ['number-only label', `[1](../../${path}#L1)`, invalidLines],
+    ['zero line', `[${path}:0](../../${path}#L0)`, invalidLines],
+    ['leading zero', `[${path}:01](../../${path}#L01)`, invalidLines],
+    ['range', `[${path}:1](../../${path}#L1-L2)`, invalidLines],
+    ['query', `[${path}:1](../../${path}?raw=1#L1)`, invalidLines],
+    ['invalid encoding', `[${path}:1](../../src/%ZZ.mjs#L1)`, invalidLines],
+    ['encoded slash', `[${path}:1](../../src%2Fcache.mjs#L1)`, invalidLines],
+    ['encoded backslash', `[${path}:1](../../src%5Ccache.mjs#L1)`, invalidLines],
   ]) {
-    const row = relatedRow(symbol, path, 'constant', '1', link);
+    const row = relatedRow().replace('`1`', cell);
     repo.write(adrPath, relatedDocument([repo.implementation], relatedTable(row)));
     const result = repo.validate();
     status(result, 1);
@@ -644,6 +687,9 @@ for (const [name, body, error] of [
   ['wrong filename case', relatedTable(relatedRow('cache', 'src/Cache.mjs')), /Source file does not exist with exact case/],
   ['wrong directory case', relatedTable(relatedRow('cache', 'Src/cache.mjs')), /Source file does not exist with exact case/],
   ['directory', relatedTable(relatedRow('cache', 'src')), /Source file does not exist with exact case/],
+  ['linked missing file', relatedTable(relatedRow('cache', 'src/missing.mjs', 'constant', '1', '../../src/missing.mjs#L1')), /Source file does not exist with exact case/],
+  ['linked line outside source file', relatedTable(relatedRow('cache', 'src/cache.mjs', 'constant', '2', '../../src/cache.mjs#L2')), /Related symbol line is outside source file/],
+  ['linked missing symbol', relatedTable(relatedRow('missing', 'src/cache.mjs', 'constant', '1', '../../src/cache.mjs#L1')), /Related symbol name not found on source line/],
 ]) {
   test(`rejects ${name} in Related Symbols through all entry points`, t => {
     const repo = fixture(t);

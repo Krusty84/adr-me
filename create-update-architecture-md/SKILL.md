@@ -9,18 +9,51 @@ If this skill is used,say:SKILL_CR_UPD_ARCH_LOADED
 
 Explain the current system to engineers who are new to the repository.
 
+## Files
+
+- Template: `templates/arch.md` (relative to this `SKILL.md`).
+- Validator: `scripts/validate-arch.mjs` (relative to this `SKILL.md`).
+- ARCHITECTURE.md output: `<repository>/docs/ARCHITECTURE.md`.
+
+Use the template without adding, deleting, renaming, or reordering its attributes or sections. Replace all placeholders. Do not edit the template to create an ADR.
+
+## Mandatory writing rules
+
+- Write all ADR prose in English, regardless of the agent session language.
+- Write in ASD-STE100, Issue 9. Use its approved vocabulary and writing rules where applicable. Keep established code terms, API names, and identifiers unchanged.
+- Be so brief every word you write costs you $1,000.
+- Describe the current structure and behavior. Check the code, tests, and relevant build or runtime configuration. Use existing documentation and user notes to clarify facts.
+- Give reasons for design decisions when they are documented. Use applicable ADRs in `docs/adr/` and other verified sources. Keep the text brief and refer to the README for general usage.
+- State verifiable facts. Do not invent the task, intent, reasons, alternatives, risks, or outcomes.
+
+## Fixed document contract
+
+Use the required heading and attribute order in `templates/arch.md`:
+
+1. `# ARCH: Title`
+2. `**Date:** YYYY-MM-DD`
+3. `**Record Type:** Agent-Session | Retrospective` (choose one)
+4. `**Evidence:** Agent Session | Git History | Manual | Mixed` (choose one)
+5. `## Overview`
+6. `## System context`
+7. `## Repository structure`
+8. `## System components`
+9. `## Startup and execution`
+10. `## Data and state`
+11. `## Key design decisions`
+12. `## External dependencies and integrations`
+13. `## Known constraints`
+
+The `Date` is the Architecture.md creation/or update date, not the implementation date. `Status: Accepted` means the user approved the document.
+
+Use `Record Type: Agent-Session` for a architecture description captured during implementation. Use `Retrospective` when reconstructing a architecture description from past work. `Evidence` identifies the principal source: `Agent Session`, `Git History`, `Manual`, or `Mixed`.
+
 ## Document requirements
 
 Use the exact title, section headings, and order from [templates/arch.md](templates/arch.md). Fill each section and replace all placeholders in the document.
 
 - Use confirmed facts in `Overview`, `System context`, and `System components`. If evidence is missing for one of these sections, ask the user for the facts before you complete the document.
 - In the other sections, use `Not recorded.` when evidence is missing. Use `Not applicable.` when a section does not apply. Give a short reason for each note and keep the facts you can confirm.
-
-## Writing rules
-
-- Write all document prose in English. Use ASD-STE100, Issue 9. Use short sentences and active voice. Keep the repository's technical terms and source names.
-- Describe the current structure and behavior. Check the code, tests, and relevant build or runtime configuration. Use existing documentation and user notes to clarify facts.
-- Give reasons for design decisions when they are documented. Use applicable ADRs in `docs/adr/` and other verified sources. Keep the text brief and refer to the README for general usage.
 
 ## Source links
 
@@ -62,3 +95,31 @@ For an existing document, pass its current path. The validator requires Node.js 
 2. The validator uses `plantuml` from `PATH` to check each diagram through stdin in `-syntax` mode. It uses the installed version and warns if the version is older or unknown. PlantUML 1.2026.4 or newer is recommended.
 3. If PlantUML is unavailable, the validator continues the document checks and warns that diagram syntax validation was skipped. Report the warning and suggest a future installation of PlantUML 1.2026.4 or newer. Warnings allow exit code `0` when the document checks pass.
 4. Review the facts, source lines, and English prose for ASD-STE100 compliance.
+
+## Validation (mandatory)
+
+The validator is part of this skill:
+
+`scripts/validate-arch.mjs`
+
+### Execution
+
+1. Determine the directory that contains this `SKILL.md`.
+2. Resolve `scripts/validate-arch.mjs` relative to that directory.
+3. Find the root of the target Git repository.
+4. Run the validator from the repository root.
+5. Pass the ARCHITECTURE.md path, repository root.
+6. Do not assume a fixed skill installation path.
+7. Do not use a validator from another skill installation.
+
+The skill can be installed globally or inside a repository.
+
+### Validation Rules
+
+The validator checks:
+
+- ARCHITECTURE.md path, filename, and ID.
+- Required attributes and allowed values.
+- Required section structure and order, with at most one optional `Related Symbols` section.
+- Required content and valid dates.
+- Unfilled fields from the bundle
