@@ -63,7 +63,7 @@ function fixture(t, objectFormat = 'sha1') {
   mkdirSync(repo);
   mkdirSync(snapshots);
   const env = Object.fromEntries(Object.entries(process.env)
-    .filter(([key]) => !/^(?:GIT_|GITHUB_|ADR_)/.test(key)));
+    .filter(([key]) => !/^(?:GIT_|GITHUB_|ADR_|ARCH_)/.test(key)));
   Object.assign(env, {
     GIT_CONFIG_GLOBAL: '/dev/null',
     GIT_CONFIG_NOSYSTEM: '1',
@@ -73,10 +73,11 @@ function fixture(t, objectFormat = 'sha1') {
     GIT_COMMITTER_NAME: 'ADR Test',
     GIT_COMMITTER_EMAIL: 'adr-test@example.invalid',
     TMPDIR: snapshots,
+    ARCH_ALLOW_MISSING: '1',
   });
   const installed = join(repo, 'create-adr-md');
   cpSync(packagePath, installed, { recursive: true });
-  for (const folder of ['.github', '.githooks']) {
+  for (const folder of ['.github', '.githooks', 'create-update-architecture-md']) {
     cpSync(join(source, folder), join(repo, folder), { recursive: true });
   }
   const config = join(repo, '.github/scripts/adr-policy.mjs');

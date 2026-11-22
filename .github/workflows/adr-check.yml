@@ -1,4 +1,4 @@
-name: ADR audit (main)
+name: ADR and architecture audit (main)
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   adr-audit:
-    name: ADR warnings (non-blocking)
+    name: ADR and architecture warnings (non-blocking)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout commit and full history
@@ -30,3 +30,6 @@ jobs:
           ADR_SCAN_LIMIT: '30'
           ADR_REMOTE: origin
         run: node .github/scripts/audit-adr.mjs
+
+      - name: Show architecture warnings
+        run: node .github/scripts/check-architecture.mjs --audit

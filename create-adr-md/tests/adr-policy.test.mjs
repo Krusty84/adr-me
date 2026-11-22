@@ -38,19 +38,20 @@ function fixture(t, { objectFormat = 'sha1', codePaths = [] } = {}) {
   const snapshots = join(directory, 'snapshots');
   mkdirSync(repo);
   mkdirSync(snapshots);
-  for (const folder of ['create-adr-md', '.github', '.githooks']) {
+  for (const folder of ['create-adr-md', 'create-update-architecture-md', '.github', '.githooks']) {
     cpSync(join(source, folder), join(repo, folder), { recursive: true });
   }
   const config = join(repo, '.github/scripts/adr-policy.mjs');
   writeFileSync(config, readFileSync(config, 'utf8')
     .replace(/const CODE_PATHS = .*;/, `const CODE_PATHS = ${JSON.stringify(codePaths)};`));
   const env = Object.fromEntries(Object.entries(process.env)
-    .filter(([key]) => !/^(?:GIT_|GITHUB_|ADR_)/.test(key)));
+    .filter(([key]) => !/^(?:GIT_|GITHUB_|ADR_|ARCH_)/.test(key)));
   Object.assign(env, {
     GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0',
     GIT_AUTHOR_NAME: 'ADR Policy Test', GIT_AUTHOR_EMAIL: 'test@example.invalid',
     GIT_COMMITTER_NAME: 'ADR Policy Test', GIT_COMMITTER_EMAIL: 'test@example.invalid',
     TMPDIR: snapshots,
+    ARCH_ALLOW_MISSING: '1',
   });
   const git = (...args) => execFileSync('git', args, {
     cwd: repo, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
@@ -275,11 +276,12 @@ test('bundled code paths include scripts, hooks, and tests', t => {
   const commits = [
     '.github/scripts/probe.mjs', '.githooks/probe',
     'create-adr-md/scripts/probe.mjs', 'create-adr-md/tests/probe.test.mjs',
+    'create-update-architecture-md/scripts/probe.mjs', 'create-update-architecture-md/tests/probe.test.mjs',
   ].map(path => repo.code(path));
   repo.write('docs/notes.md', 'Documentation only.\n');
   const documentation = repo.commit();
   const audit = repo.audit();
-  auditWarnings(audit, 5);
+  auditWarnings(audit, 7);
   const hook = repo.hook('0'.repeat(repo.base.length));
   status(hook, 1);
   for (const sha of [repo.base, ...commits]) assert.ok(audit.summary.includes(sha), sha);

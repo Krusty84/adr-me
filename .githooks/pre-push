@@ -1,28 +1,46 @@
 #!/bin/sh
-# Check ADRs in a direct push to main.
+# Check ADRs and architecture documents in a direct push to main.
 set -eu
+
+confirm_missing() {
+  [ "$2" = 1 ] && return 0
+  if {
+    printf '%s [y/N] ' "$1" >&3
+    IFS= read -r answer <&3 || return 1
+    case "$answer" in
+      y|yes) ;;
+      *) return 1 ;;
+    esac
+  } 2>/dev/null 3<>/dev/tty; then
+    return 0
+  fi
+  printf 'No terminal. To confirm %s, retry with %s=1 git push …\n' "$3" "$4" >&2
+  return 1
+}
 
 remote_name="${1:-origin}"
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$remote_ref" = 'refs/heads/main' ] || continue
 
+  adr_status=0
   BASE_SHA="$remote_sha" \
   HEAD_SHA="$local_sha" \
   ADR_REMOTE="$remote_name" \
-    node .github/scripts/check-adr.mjs && continue
-  [ "$?" -eq 2 ] || exit 1
-  [ "${ADR_ALLOW_MISSING:-}" = 1 ] && continue
+    node .github/scripts/check-adr.mjs || adr_status=$?
+  arch_status=0
+  HEAD_SHA="$local_sha" \
+    node .github/scripts/check-architecture.mjs || arch_status=$?
 
-  if {
-    printf 'Push without ADRs for these commits? [y/N] ' >&3
-    IFS= read -r answer <&3 || exit 1
-    case "$answer" in
-      y|yes) ;;
-      *) exit 1 ;;
-    esac
-  } 2>/dev/null 3<>/dev/tty; then
-    continue
+  case "$adr_status:$arch_status" in
+    0:0|0:2|2:0|2:2) ;;
+    *) exit 1 ;;
+  esac
+  if [ "$adr_status" -eq 2 ]; then
+    confirm_missing 'Push without ADRs for these commits?' "${ADR_ALLOW_MISSING:-}" \
+      'missing ADRs' ADR_ALLOW_MISSING || exit 1
   fi
-  printf '%s\n' 'No terminal. To confirm missing ADRs, retry with ADR_ALLOW_MISSING=1 git push …' >&2
-  exit 1
+  if [ "$arch_status" -eq 2 ]; then
+    confirm_missing 'Push without ARCHITECTURE.md?' "${ARCH_ALLOW_MISSING:-}" \
+      'missing architecture documents' ARCH_ALLOW_MISSING || exit 1
+  fi
 done

@@ -6,7 +6,7 @@
 import { isAbsolute } from "node:path";
 
 // Repository-relative code paths. Set these for each target repository.
-const CODE_PATHS = [".github/scripts/", ".githooks/", "create-adr-md/scripts/", "create-adr-md/tests/"];
+const CODE_PATHS = [".github/scripts/", ".githooks/", "create-adr-md/scripts/", "create-adr-md/tests/", "create-update-architecture-md/scripts/", "create-update-architecture-md/tests/"];
 
 export const codePathspecs = Array.isArray(CODE_PATHS) && CODE_PATHS.every(
   (path) => typeof path === "string" && path.trim().length > 0 &&
