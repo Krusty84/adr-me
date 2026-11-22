@@ -1,6 +1,6 @@
 # adr-me
 
-Create ADR.md (Architecture Decision Records) and ARCHITECTURE.md documents with an AI agent.
+Create `ADR.md` (Architecture Decision Records) and `ARCHITECTURE.md` documents with an AI agent.
 
 ## What Is This?
 
@@ -11,13 +11,13 @@ adr-me contains two agent skills (each skill includes a document template and a 
 
 ## Features
 
-- Install skills for Codex, OpenCode, and Claude Code through an interactive CLI.
-- Record decisions from an agent session or Git history.
-- Link ADRs to implementation commits and source symbols.
+- Record technical decisions in `ADR.md` from an agent session or Git history.
+- Link `ADR.md` to implementation commits and source symbols.
+- Create `ARCHITECTURE.md` from an agent session or Git history.
 - Create and update `ARCHITECTURE.md` with source links and PlantUML context and component diagrams.
-- Check document structure, source references, and ADR commit links.
-- Check ADRs and architecture documents before pushes to `main`. 
-- Report document errors and code commits without valid ADR links in GitHub Actions.
+- Check `ADR.md` and `ARCHITECTURE.md` documents structure, source references, and `ADR.md` commit links.
+- Check `ADR.md` and `ARCHITECTURE.md` documents before pushes to `main`. 
+- Report `ADR.md` and `ARCHITECTURE.md` validation issues and code commits without valid `ADR.md` links as warnings in GitHub Actions.
 
 ## Who is it for?
 
@@ -55,7 +55,7 @@ Project installation uses the Git repository root. Outside a Git working tree, o
 
 Existing files are kept. Identical files are skipped. A conflicting file skips the whole skill for that agent. Other components can still install. Repeating the same choices adds only missing files, changing existing generated files requires manual conflict resolution. The summary lists installed and skipped components, conflicts, and files to commit. The installer does not stage, commit, or push.
 
-ADR validation requires a configured Git remote and the implementation commits in local history.
+`ADR.md` validation requires a configured Git remote and the implementation commits in local history.
 
 ### Install PlantUML (optional)
 
@@ -105,7 +105,7 @@ Use create-adr-md to record the accepted decision from this session.
 Use create-update-architecture-md to describe the current system in docs/ARCHITECTURE.md
 ```
 
-ADRs use `docs/adr/NNNN-short-title.md`. New architecture documents use `docs/ARCHITECTURE.md` existing documents keep their current path.
+`ADR.md` use `docs/adr/NNNN-short-title.md`. New architecture documents use `docs/ARCHITECTURE.md` existing documents keep their current path.
 
 Validate documents after each change. Review facts and ASD-STE100 style separately. 
 
