@@ -11,6 +11,7 @@ adr-me contains two agent skills (each skill includes a document template and a 
 
 ## Features
 
+- Install skills for Codex, OpenCode, and Claude Code through an interactive CLI.
 - Record decisions from an agent session or Git history.
 - Link ADRs to implementation commits and source symbols.
 - Create and update `ARCHITECTURE.md` with source links and PlantUML context and component diagrams.
@@ -24,13 +25,36 @@ For engineers who use AI agents to record technical decisions and explain system
 
 ## How to install
 
-Requires Git, Node.js 18 or later, and an agent that can follow `SKILL.md` instructions. The validators need no npm packages.
+The installer requires Node.js 22 or later on macOS or Linux. Git is required for project installation, hooks, and GitHub Actions. The installed validators need no npm packages.
+
+The npm package is not published yet. Build an archive from this repository:
 
 ```sh
 git clone https://github.com/Krusty84/adr-me.git
+cd adr-me
+npm install --ignore-scripts
+npm pack --pack-destination /tmp
 ```
 
-Copy the complete `create-adr-md/` and `create-update-architecture-md/` directories into the target Git repository root. Keep their templates, scripts, and references.
+Run the wizard from the target repository or any of its subdirectories:
+
+```sh
+npx --package /tmp/adr-me-0.1.0.tgz adr-me init
+```
+
+After npm publication, the registry command will be `npx adr-me init`.
+
+Select one or more agents, the installation scope, and `All` or one skill. Project installation and both skills are the defaults. Skill directories contain the instructions, scripts, templates, and references; tests are excluded.
+
+| Agent | Project | Global |
+| --- | --- | --- |
+| Codex | `.agents/skills/` | `~/.codex/skills/` |
+| OpenCode | `.opencode/skills/` | `~/.config/opencode/skills/` |
+| Claude Code | `.claude/skills/` | `~/.claude/skills/` |
+
+Project installation uses the Git repository root. Outside a Git working tree, only global skills are available. The wizard requires an interactive terminal. Cancellation during questions writes no files.
+
+Existing files are kept. Identical files are skipped. A conflicting file skips the whole skill for that agent. Other components can still install. Repeating the same choices adds only missing files; changing existing generated files requires manual conflict resolution. The summary lists installed and skipped components, conflicts, and files to commit. The installer does not stage, commit, or push.
 
 ADR validation requires a configured Git remote and the implementation commits in local history.
 
@@ -38,19 +62,17 @@ PlantUML is optional. Make `plantuml` available on `PATH` to check diagram synta
 
 ### Optional push checks
 
-Merge `.github/` and `.githooks/` from this package into the target repository root. Keep existing files and settings. The hook and GitHub Actions require both complete skill directories at the repository root. Commit the installed files so GitHub Actions can read them.
+The wizard offers the local Git pre-push hook and GitHub Actions independently. Both are off by default. They apply to the current repository even when skills are installed globally, and run checks only for the selected skills.
 
-Run these commands in the target repository on each developer computer:
+For ADR checks, enter at least one existing code file or directory relative to the repository root, such as `src/`. Enter paths individually. Absolute paths, `..`, glob patterns, and paths outside the repository are rejected.
 
-```sh
-git config core.hooksPath .githooks
-chmod +x .githooks/pre-push
-git update-index --chmod=+x .githooks/pre-push
-```
+Check scripts, validators, templates, and references are copied into `.adr-me/`. They work without globally installed skills or the npm cache. The selected paths are written to `.adr-me/.github/scripts/adr-policy.mjs`; the hook and Actions share this configuration.
 
-Set `CODE_PATHS` in [.github/scripts/adr-policy.mjs](.github/scripts/adr-policy.mjs) to the target repository's relative code paths, for example `["src/", "tests/"]`. The defaults cover this package's scripts, hook, and tests for both skills. An empty or invalid list skips the commit scan. Document checks still run.
+The hook is installed at the path reported by `git rev-parse --git-path hooks/pre-push` and made executable. An existing different hook or a configured `core.hooksPath` skips hook installation. Existing settings are kept. Hooks are local: run the wizard on each developer computer to connect the committed checks, using the same skills and code paths.
 
-The hook uses the push remote. GitHub Actions uses `origin` through `ADR_REMOTE` in [.github/workflows/adr-check.yml](.github/workflows/adr-check.yml). Keep `fetch-depth: 0` so the audit has full Git history.
+GitHub Actions is written to `.github/workflows/adr-check.yml`. Commit this workflow and `.adr-me/` so Actions can read the checks. A conflicting check dependency prevents installation of its hook or workflow.
+
+The hook uses the push remote. GitHub Actions uses `origin` through `ADR_REMOTE` in the installed workflow. Keep `fetch-depth: 0` so the audit has full Git history.
 
 ## How to use
 
@@ -63,11 +85,11 @@ Use create-update-architecture-md to describe the current system in docs/ARCHITE
 
 ADRs use `docs/adr/NNNN-short-title.md`. New architecture documents use `docs/ARCHITECTURE.md` existing documents keep their current path.
 
-Run validation from the target repository root. Replace the example ADR path with your file.
+Run validation from the target repository root. These commands use the Codex project installation. For another agent or global installation, use the corresponding skill directory from the table. Replace the example ADR path with your file.
 
 ```sh
-node create-adr-md/scripts/validate-adr.mjs docs/adr/0001-short-title.md --repo . --remote origin
-node create-update-architecture-md/scripts/validate-arch.mjs docs/ARCHITECTURE.md --repo .
+node .agents/skills/create-adr-md/scripts/validate-adr.mjs docs/adr/0001-short-title.md --repo . --remote origin
+node .agents/skills/create-update-architecture-md/scripts/validate-arch.mjs docs/ARCHITECTURE.md --repo .
 ```
 
 Review facts and ASD-STE100 wording separately from automated validation.
@@ -93,7 +115,7 @@ The optional `Related Symbols` table links declarations to source files and line
 Validate the ADR, then commit it separately from the implementation:
 
 ```sh
-node create-adr-md/scripts/validate-adr.mjs docs/adr/0042-cache-sync.md --repo . --remote origin
+node .agents/skills/create-adr-md/scripts/validate-adr.mjs docs/adr/0042-cache-sync.md --repo . --remote origin
 git add docs/adr/0042-cache-sync.md
 git commit -m 'docs: record cache synchronization ADR'
 ```
