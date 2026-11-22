@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { install, SKILLS } from '../../lib/install.mjs';
+
+process.env.GIT_CONFIG_GLOBAL = '/dev/null';
+process.env.GIT_CONFIG_NOSYSTEM = '1';
 
 const source = fileURLToPath(new URL('../../', import.meta.url));
+const checksPath = '.github/scripts/adr-me';
 const adrPath = 'docs/adr/0001-cache.md';
 const template = readFileSync(join(source, 'create-adr-md/templates/adr.md'), 'utf8');
 const relatedSymbolsTemplate = '## Related Symbols\n\n' +
@@ -38,12 +43,6 @@ function fixture(t, { objectFormat = 'sha1', codePaths = [] } = {}) {
   const snapshots = join(directory, 'snapshots');
   mkdirSync(repo);
   mkdirSync(snapshots);
-  for (const folder of ['create-adr-md', 'create-update-architecture-md', '.github', '.githooks']) {
-    cpSync(join(source, folder), join(repo, folder), { recursive: true });
-  }
-  const config = join(repo, '.github/scripts/adr-policy.mjs');
-  writeFileSync(config, readFileSync(config, 'utf8')
-    .replace(/const CODE_PATHS = .*;/, `const CODE_PATHS = ${JSON.stringify(codePaths)};`));
   const env = Object.fromEntries(Object.entries(process.env)
     .filter(([key]) => !/^(?:GIT_|GITHUB_|ADR_|ARCH_)/.test(key)));
   Object.assign(env, {
@@ -71,8 +70,10 @@ function fixture(t, { objectFormat = 'sha1', codePaths = [] } = {}) {
   };
   git('init', '-q', '--initial-branch=main', `--object-format=${objectFormat}`);
   git('config', 'commit.gpgsign', 'false');
-  git('config', 'core.hooksPath', '.githooks');
   git('remote', 'add', 'origin', 'https://github.com/example/adr-policy.git');
+  const components = install({ agents: [], scope: 'project', skills: SKILLS, hook: true, actions: true, codePaths },
+    { repository: realpathSync(repo) });
+  for (const component of components) assert.equal(component.status, 'installed', `${component.name}: ${component.reason}`);
   const base = commit();
   let value = 0;
   const code = (path = 'src/cache.mjs') => {
@@ -80,7 +81,7 @@ function fixture(t, { objectFormat = 'sha1', codePaths = [] } = {}) {
     return commit();
   };
   const hook = (before = base, allowMissing = '') => {
-    const result = run(join(repo, '.githooks/pre-push'), ['origin'], {
+    const result = run(join(repo, '.git/hooks/pre-push'), ['origin'], {
       input: `refs/heads/main ${git('rev-parse', 'HEAD')} refs/heads/main ${before}\n`,
       detached: true, env: { ADR_ALLOW_MISSING: allowMissing },
     });
@@ -90,7 +91,7 @@ function fixture(t, { objectFormat = 'sha1', codePaths = [] } = {}) {
   const audit = () => {
     const summaryPath = join(directory, 'summary.md');
     writeFileSync(summaryPath, '');
-    const result = run(process.execPath, ['.github/scripts/audit-adr.mjs'], {
+    const result = run(process.execPath, [`${checksPath}/audit-adr.mjs`], {
       env: { GITHUB_REPOSITORY: 'example/adr-policy', GITHUB_STEP_SUMMARY: summaryPath },
     });
     assert.deepEqual(readdirSync(snapshots), [], 'Audit removes its snapshots');
@@ -117,7 +118,7 @@ test('importing the validator is silent and preserves the exit code', t => {
   const repo = fixture(t);
   for (const exitCode of [0, 7]) {
     const result = repo.run(process.execPath, ['--input-type=module', '--eval',
-      `process.exitCode = ${exitCode}; await import('./create-adr-md/scripts/validate-adr.mjs');`]);
+      `process.exitCode = ${exitCode}; await import('./${checksPath}/create-adr-md/scripts/validate-adr.mjs');`]);
     status(result, exitCode);
     assert.equal(result.stdout, '');
     assert.equal(result.stderr, '');
@@ -127,7 +128,7 @@ test('importing the validator is silent and preserves the exit code', t => {
 test('the validator CLI preserves success, validation, and usage exit codes', t => {
   const repo = fixture(t);
   const implementation = repo.code();
-  const args = ['create-adr-md/scripts/validate-adr.mjs', adrPath, '--repo', '.', '--remote', 'origin'];
+  const args = [`${checksPath}/create-adr-md/scripts/validate-adr.mjs`, adrPath, '--repo', '.', '--remote', 'origin'];
   repo.write(adrPath, document([implementation]));
   status(repo.run(process.execPath, args), 0);
   repo.write(adrPath, '# Invalid ADR\n');
@@ -271,8 +272,7 @@ test('only uncovered commits in configured paths produce warnings', t => {
 
 test('bundled code paths include scripts, hooks, and tests', t => {
   const repo = fixture(t);
-  const config = '.github/scripts/adr-policy.mjs';
-  repo.write(config, readFileSync(join(source, config), 'utf8'));
+  repo.write(`${checksPath}/adr-policy.mjs`, readFileSync(join(source, '.github/scripts/adr-policy.mjs'), 'utf8'));
   const commits = [
     '.github/scripts/probe.mjs', '.githooks/probe',
     'create-adr-md/scripts/probe.mjs', 'create-adr-md/tests/probe.test.mjs',

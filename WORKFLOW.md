@@ -66,11 +66,11 @@ The wizard offers the local Git pre-push hook and GitHub Actions independently. 
 
 For `ADR.md` checks, enter at least one existing code file or directory relative to the repository root, such as `src/`. Enter paths individually. Absolute paths, `..`, glob patterns, and paths outside the repository are rejected.
 
-Check scripts, validators, templates, and references are copied into `.adr-me/`. They work without globally installed skills or the npm cache. The selected paths are written to `.adr-me/.github/scripts/adr-policy.mjs`, the hook and Actions share this configuration.
+Check scripts are copied directly into `.github/scripts/adr-me/`. Validators, templates, and references use its `create-adr-md/` and `create-update-architecture-md/` subdirectories. These resources exclude `SKILL.md` and tests. They work without globally installed skills or the npm cache. The selected code paths are written to `.github/scripts/adr-me/adr-policy.mjs`; the hook and Actions share this configuration.
 
 The hook is installed at the path reported by `git rev-parse --git-path hooks/pre-push` and made executable. An existing different hook or a configured `core.hooksPath` skips hook installation. Existing settings are kept. Hooks are local: run the wizard on each developer computer to connect the committed checks, using the same skills and code paths.
 
-GitHub Actions is written to `.github/workflows/adr-check.yml`. Commit this workflow and `.adr-me/` so Actions can read the checks. A conflicting check dependency prevents installation of its hook or workflow.
+GitHub Actions is written to `.github/workflows/adr-check.yml`. Commit this workflow and `.github/scripts/adr-me/` so Actions can read the checks. The installer lists these files under `Files to commit`; the local hook is excluded. A conflicting check dependency prevents installation of its hook or workflow.
 
 The hook uses the push remote. GitHub Actions uses `origin` through `ADR_REMOTE` in the installed workflow. Keep `fetch-depth: 0` so the audit has full Git history.
 

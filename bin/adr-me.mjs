@@ -4,13 +4,22 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { readFileSync } from "node:fs";
 import { AGENTS, SKILLS, commitSummary, findRepository, install, normalizeCodePath } from "../lib/install.mjs";
 
 const usage = "Usage: adr-me init\n\nStart the interactive skill installer. Installation flags are not supported.";
 const cancelled = Symbol("cancelled");
 
 async function initialize(p) {
-  p.intro("adr-me");
+  const { version, license } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  p.intro(`adr-me v${version}`);
+  p.note([
+    "Install ADR and ARCHITECTURE skills for AI agents.",
+    "Optional: Git pre-push hook and GitHub Actions.",
+    "",
+    "Shared checks: .github/scripts/adr-me/",
+    `License: ${license}`,
+  ].join("\n"));
   const ask = async (question) => {
     const answer = await question;
     if (p.isCancel(answer)) throw cancelled;

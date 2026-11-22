@@ -99,7 +99,7 @@ Chocolatey uses `plantumlc` for console operations. To run adr-me on Windows, us
 
 ### Optional push checks
 
-Git pre-push and GitHub Actions checks are optional and off by default. Enable them independently in the wizard. See [setup instructions](WORKFLOW.md#optional-push-checks).
+Git pre-push and GitHub Actions checks are optional and off by default. Enable them independently in the wizard. Their shared scripts and resources use `.github/scripts/adr-me/`. Commit this directory and the selected workflow. See [setup instructions](WORKFLOW.md#optional-push-checks).
 
 ## How to use
 

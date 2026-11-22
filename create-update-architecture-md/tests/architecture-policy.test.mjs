@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { install, SKILLS } from '../../lib/install.mjs';
+
+process.env.GIT_CONFIG_GLOBAL = '/dev/null';
+process.env.GIT_CONFIG_NOSYSTEM = '1';
 
 const source = fileURLToPath(new URL('../../', import.meta.url));
+const checksPath = '.github/scripts/adr-me';
 const template = readFileSync(join(source, 'create-update-architecture-md/templates/arch.md'), 'utf8');
 const archPath = 'docs/ARCHITECTURE.md';
 const sourcePath = 'src/cache.mjs';
@@ -45,11 +50,6 @@ else {
   console.log(process.env.PLANTUML_FAIL ? 'ERROR\\nSyntax Error?' : 'COMPONENT\\n(2 entities)');
 }
 `, { mode: 0o755 });
-  for (const folder of ['create-adr-md', 'create-update-architecture-md', '.github', '.githooks'])
-    cpSync(join(source, folder), join(repo, folder), { recursive: true });
-  const config = join(repo, '.github/scripts/adr-policy.mjs');
-  writeFileSync(config, readFileSync(config, 'utf8')
-    .replace(/const CODE_PATHS = .*;/, `const CODE_PATHS = ${JSON.stringify(codePaths)};`));
   const env = Object.fromEntries(Object.entries(process.env)
     .filter(([key]) => !/^(?:GIT_|GITHUB_|ADR_|ARCH_|PLANTUML_)/.test(key)));
   Object.assign(env, {
@@ -80,20 +80,22 @@ else {
   };
   git('init', '-q', '--initial-branch=main', `--object-format=${objectFormat}`);
   git('config', 'commit.gpgsign', 'false');
-  git('config', 'core.hooksPath', '.githooks');
   git('remote', 'add', 'origin', 'https://github.com/example/architecture-policy.git');
+  const components = install({ agents: [], scope: 'project', skills: SKILLS, hook: true, actions: true, codePaths },
+    { repository: realpathSync(repo) });
+  for (const component of components) assert.equal(component.status, 'installed', `${component.name}: ${component.reason}`);
   write(sourcePath, 'export const cache = new Map();\nexport function reset() { cache.clear(); }\n');
   const base = commit();
   const check = (revision = git('rev-parse', 'HEAD'), overrides = {}) => run(process.execPath,
-    ['.github/scripts/check-architecture.mjs'], { env: { HEAD_SHA: revision, ...overrides } });
+    [`${checksPath}/check-architecture.mjs`], { env: { HEAD_SHA: revision, ...overrides } });
   const hook = ({ before = base, after = git('rev-parse', 'HEAD'), ref = 'refs/heads/main', env } = {}) =>
-    run(join(repo, '.githooks/pre-push'), ['origin'], {
+    run(join(repo, '.git/hooks/pre-push'), ['origin'], {
       input: `refs/heads/main ${after} ${ref} ${before}\n`, detached: true, env,
     });
   const audit = (overrides = {}) => {
     const summaryPath = join(directory, 'summary.md');
     writeFileSync(summaryPath, '');
-    const result = run(process.execPath, ['.github/scripts/check-architecture.mjs', '--audit'], {
+    const result = run(process.execPath, [`${checksPath}/check-architecture.mjs`, '--audit'], {
       env: { GITHUB_STEP_SUMMARY: summaryPath, ...overrides },
     });
     return { ...result, summary: readFileSync(summaryPath, 'utf8') };
@@ -101,7 +103,7 @@ else {
   const terminal = (answer) => {
     const after = git('rev-parse', 'HEAD');
     write('.terminal-test.sh', `#!/bin/sh
-printf '%s\\n' 'refs/heads/main ${after} refs/heads/main ${base}' | .githooks/pre-push origin
+printf '%s\\n' 'refs/heads/main ${after} refs/heads/main ${base}' | .git/hooks/pre-push origin
 printf 'HOOK_STATUS=%s\\n' "$?"
 `);
     const command = process.platform === 'darwin'
@@ -346,7 +348,7 @@ test('validator launch failure cleans the snapshot and remains non-blocking in a
   const repo = fixture(t);
   repo.write(archPath, document());
   repo.commit();
-  rmSync(join(repo.repo, 'create-update-architecture-md/scripts/validate-arch.mjs'));
+  rmSync(join(repo.repo, checksPath, 'create-update-architecture-md/scripts/validate-arch.mjs'));
   status(repo.check(), 1);
   const audit = repo.audit();
   status(audit, 0);
