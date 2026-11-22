@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026 Alexey Sedoykin
+ * SPDX-License-Identifier: MIT
+ */
 
 import { AGENTS, SKILLS, commitSummary, findRepository, install, normalizeCodePath } from "../lib/install.mjs";
 

@@ -1,9 +1,44 @@
 {
   "name": "adr-me",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Install ADR and architecture skills for AI agents.",
-  "license": "MIT",
+  "version": "1.0.0",
+   "license": "MIT",
+  "description": "Install ADR.md and ARCHITECTURE.md skills for AI agents.",
+  "author": {
+    "name": "Alexey Sedoykin",
+    "url": "https://www.sedoykin.com/"
+  },  
+  "homepage": "https://github.com/Krusty84/adr-me#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Krusty84/adr-me.git"
+  },
+  "keywords": [
+  "adr",
+  "architecture",
+  "ADR.md",
+  "ARCHITECTURE.md",
+  "agent-skills",
+  "codex",
+  "opencode",
+  "claude-code",
+  "architecture-decision-record",
+  "architecture-decision-records",
+  "software-architecture",
+  "architecture-documentation",
+  "docs-as-code",
+  "markdown",
+  "ai-agents",
+  "coding-agents",
+  "developer-tools",
+  "cli",
+  "git-hooks",
+  "github-actions",
+  "plantuml"
+  ],
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
   "type": "module",
   "bin": {
     "adr-me": "bin/adr-me.mjs"
@@ -13,6 +48,7 @@
   },
   "os": ["darwin", "linux"],
   "files": [
+    "WORKFLOW.md",
     "bin/",
     "lib/",
     ".github/scripts/",
