@@ -8,6 +8,11 @@ adr-me contains two agent skills (each skill includes a document template and a 
 [create-adr-md](create-adr-md/SKILL.md) records accepted technical decisions
 [create-update-architecture-md](create-update-architecture-md/SKILL.md) describes the current system. 
 
+<img width="363" height="309" alt="image" src="https://github.com/user-attachments/assets/b58f5734-b2d6-4932-93ac-54e16937ee06" />
+
+<img width="925" height="924" alt="image" src="https://github.com/user-attachments/assets/4184da80-c52f-4d7a-b3fe-7fa85301910c" />
+
+<img width="1330" height="932" alt="image" src="https://github.com/user-attachments/assets/5b7dcf26-79c9-4b13-972d-b3b276e267d3" />
 
 ## Features
 
