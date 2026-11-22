@@ -37,13 +37,13 @@ The installed validators need no npm packages.
 For a published npm release, run the wizard from the target repository or any of its subdirectories:
 
 ```sh
-npx adr-me init
+npx adr-me
 ```
 
 Or install directly from GitHub:
 
 ```sh
-npx --package=github:Krusty84/adr-me adr-me init
+npx --package=github:Krusty84/adr-me adr-me
 ```
 
 You can also download a package archive from [GitHub Releases](https://github.com/Krusty84/adr-me/releases).

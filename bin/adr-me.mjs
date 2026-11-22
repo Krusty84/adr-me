@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { AGENTS, SKILLS, commitSummary, findRepository, install, normalizeCodePath } from "../lib/install.mjs";
 
-const usage = "Usage: adr-me init\n\nStart the interactive skill installer. Installation flags are not supported.";
+const usage = "Usage: adr-me [init]\n\nStart the interactive skill installer. Installation flags are not supported.";
 const cancelled = Symbol("cancelled");
 
 async function initialize(p) {
@@ -81,7 +81,7 @@ async function initialize(p) {
     const localHook = components.find(({ kind }) => kind === "hook");
     if (localHook) p.note([
       localHook.files[0]?.path,
-      localHook.reason || "Local to this Git checkout. Run adr-me init on each developer computer.",
+      localHook.reason || "Local to this Git checkout. Run npx adr-me on each developer computer.",
     ].filter(Boolean).join("\n"), "Local pre-push hook (not committed)");
     if (repository) {
       const summary = commitSummary(components, repository);
@@ -100,12 +100,12 @@ async function initialize(p) {
 
 try {
   const args = process.argv.slice(2);
-  if (args.length === 0 || (args.length === 1 && ["--help", "-h"].includes(args[0]))) console.log(usage);
-  else if (args.length !== 1 || args[0] !== "init") throw new Error(usage);
+  if (args.length === 1 && ["--help", "-h"].includes(args[0])) console.log(usage);
+  else if (args.length > 1 || (args.length === 1 && args[0] !== "init")) throw new Error(usage);
   else {
     if (Number(process.versions.node.split(".")[0]) < 22) throw new Error("adr-me requires Node.js 22 or later.");
     if (!["darwin", "linux"].includes(process.platform)) throw new Error("adr-me supports macOS and Linux.");
-    if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("adr-me init requires an interactive terminal. No files were written.");
+    if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("adr-me requires an interactive terminal. No files were written.");
     await initialize(await import("@clack/prompts"));
   }
 } catch (error) {
