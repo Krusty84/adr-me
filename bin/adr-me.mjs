@@ -11,14 +11,20 @@ const usage = "Usage: adr-me [init]\n\nStart the interactive skill installer. In
 const cancelled = Symbol("cancelled");
 
 async function initialize(p) {
-  const { version, license } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const { version, author, license } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   p.intro(`adr-me v${version}`);
   p.note([
-    "Install ADR and ARCHITECTURE skills for AI agents.",
-    "Optional: Git pre-push hook and GitHub Actions.",
-    "",
+    "adr-me: ADR and ARCHITECTURE skills for AI agents.",
+    "-",
+    "For developers and engineers who use agents in their work",
+    "but don't want to lose control over the decisions made",
+    "and what is happening with their system overall.",
+    "-",
     "Shared checks: .github/scripts/adr-me/",
-    `License: ${license}`,
+    "Optional: Git pre-push hook and GitHub Actions.",
+    "-",
+    `Author: ${author.name}, License: ${license}`,
+    `Website: ${author.url}`,
   ].join("\n"));
   const ask = async (question) => {
     const answer = await question;

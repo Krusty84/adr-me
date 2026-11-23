@@ -1,6 +1,6 @@
 {
   "name": "adr-me",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "license": "MIT",
   "description": "Install ADR.md and ARCHITECTURE.md skills for AI agents.",
   "author": {
