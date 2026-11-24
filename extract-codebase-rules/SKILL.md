@@ -11,12 +11,13 @@ Show engineers which rules a subsystem depends on and which practices its implem
 
 ## Files
 
-| Document | Template | Default output |
-| --- | --- | --- |
-| Technical constraints | [cons.md](templates/cons.md) | `docs/CONSTRAINTS.md` |
-| Implementation conventions | [conv.md](templates/conv.md) | `docs/CONVENTIONS.md` |
+- Template for technical constraints: `templates/cons.md` (relative to this `SKILL.md`).
+- Template for implementation conventions: `templates/conv.md` (relative to this `SKILL.md`).
+- Validator: `scripts/validate-codebase-rules.mjs` (relative to this `SKILL.md`).
+- CONSTRAINTS.md output: `<repository>/docs/CONSTRAINTS.md`.
+- CONVENTIONS.md output: `<repository>/docs/CONVENTIONS.md`.
 
-The templates and the [validator](scripts/validate-codebase-rules.mjs) are relative to this `SKILL.md`. Output paths are relative to the target repository root.
+Use the templates without adding, deleting, renaming, or reordering its attributes or sections. Replace all placeholders. Do not edit the templates.
 
 ## Mandatory writing rules
 
