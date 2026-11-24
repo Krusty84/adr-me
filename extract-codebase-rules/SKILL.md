@@ -17,8 +17,6 @@ Show engineers and agents which rules a subsystem depends on and which practices
 - CONSTRAINTS.md output: `<repository>/docs/CONSTRAINTS.md`.
 - CONVENTIONS.md output: `<repository>/docs/CONVENTIONS.md`.
 
-Use the templates without adding, deleting, renaming, or reordering its attributes or sections. Replace all placeholders. Do not edit the templates.
-
 ## Mandatory writing rules
 
 - Write both documents in English. Follow ASD-STE100, Issue 9. Use short sentences and active voice. Preserve code identifiers.
@@ -28,22 +26,33 @@ Use the templates without adding, deleting, renaming, or reordering its attribut
 
 ## Fixed document contract
 
-Use the matching template. Keep its headings, fields, and table columns in order. Replace all placeholders in the output. Use LF line endings.
+Use the matching template as a read-only source. Keep the exact headings, fields, and table columns in template order. Replace all placeholders in the output. Use LF line endings.
 
-Include these three fields after the title, in the order shown.
+Use this order for `CONSTRAINTS.md`.
 
-1. `Date` — creation or update date in `YYYY-MM-DD` format.
-2. `Record Type` — `Agent-Session` for facts captured during implementation or `Retrospective` for facts reconstructed from existing code.
-3. `Evidence` — identify the source files and any supporting evidence used.
+1. `# CONSTRAINTS: <Subsystem name>`
+2. `**Date:** YYYY-MM-DD`
+3. `**Record Type:** <Agent-Session | Retrospective>`
+4. `**Evidence:** <Source files and any supporting tests, build configuration, or history.>`
+5. `## Scope`
+6. `## Constraint index`
+7. `## Constraints`
+8. `## Observations`
+9. `## Known gaps and open questions`
 
-| Heading order | CONSTRAINTS.md | CONVENTIONS.md |
-| --- | --- | --- |
-| Title | `# CONSTRAINTS: <Subsystem name>` | `# CONVENTIONS: <Subsystem name>` |
-| 1 | `Scope` | `Scope` |
-| 2 | `Constraint index` | `Convention index` |
-| 3 | `Constraints` | `Conventions` |
-| 4 | `Observations` | `Observations` |
-| 5 | `Known gaps and open questions` | `Known gaps and open questions` |
+Use this order for `CONVENTIONS.md`.
+
+1. `# CONVENTIONS: <Subsystem name>`
+2. `**Date:** YYYY-MM-DD`
+3. `**Record Type:** <Agent-Session | Retrospective>`
+4. `**Evidence:** <Source files and any supporting tests, build configuration, or history.>`
+5. `## Scope`
+6. `## Convention index`
+7. `## Conventions`
+8. `## Observations`
+9. `## Known gaps and open questions`
+
+Set `Date` to the date you create or update the document. Use `Agent-Session` for facts you record during implementation or `Retrospective` for facts you reconstruct from existing code. In `Evidence`, identify the source files and any supporting evidence you used.
 
 - **Constraint.** Assign an unused `C-NNNN` ID and set `Requirement` to `MUST`. Cite the check, caller, or dependency that establishes the rule. State what changes if the rule is broken and how to verify it. One enforced dependency can establish a constraint.
 - **Convention.** Assign an unused `V-NNNN` ID and set `Requirement` to `SHOULD`. Give at least two examples from independent implementations that serve the same purpose. Cite each example in its table row and state when the practice applies.
