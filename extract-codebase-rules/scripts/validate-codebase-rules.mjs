@@ -190,7 +190,7 @@ function entries(body, sample, observations, prefix, findings, categories) {
     }
     const references = values.get("Related")?.match(/\b[CV]-\d+\b/g) ?? [];
     for (const ref of references) check(/^[CV]-\d{4}$/.test(ref), `${id}: invalid related ID ${ref}`);
-    findings.set(id, { title, status: values.get("Status"), category: values.get("Category"), references });
+    findings.set(id, { title, category: values.get("Category"), references });
   }
 }
 
@@ -199,11 +199,11 @@ function checkIndex(body, model, findings) {
   const indexed = new Set();
   const label = cell => cell.replace(/^\[([^\]]+)\]\(#[^)]+\)$/, "$1").replace(/^`([^`]+)`$/, "$1");
   for (const row of rows) {
-    const [id, title, category, , status, replacement] = row.map(label);
+    const [id, title, category, , replacement] = row.map(label);
     const entry = findings.get(id);
     check(entry && !indexed.has(id), `Index: missing or duplicate entry for ${id}`);
-    check(label(entry.title) === title && entry.category === category && entry.status === status, `Index disagrees with entry ${id}`);
-    if (status === "SUPERSEDED" || !/^[-–—]$/.test(replacement)) {
+    check(label(entry.title) === title && entry.category === category, `Index disagrees with entry ${id}`);
+    if (!/^[-–—]$/.test(replacement)) {
       check(/^[CV]-\d{4}$/.test(replacement) && replacement !== id, `Index: invalid replacement for ${id}`);
       entry.references.push(replacement);
     }
@@ -246,8 +246,7 @@ function validate(file, root, counts) {
   const reviewed = fields(doc.items.get(review), review);
   checkFields(reviewed, fields(model.items.get(review), review), review);
   const last = reviewed.get("Last reviewed");
-  if (/^Pending review\.?$/.test(last)) check(metadata.get("Status") === "Draft", "Accepted documents require a review date and reviewer");
-  else {
+  if (!/^Pending review\.?$/.test(last)) {
     const date = last.match(/\b\d{4}-\d{2}-\d{2}\b/);
     check(date && validDate(date[0]) && /[\p{L}\p{N}]/u.test(last.replace(date[0], "")), "Invalid Last reviewed date or reviewer");
   }

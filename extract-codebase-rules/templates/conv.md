@@ -1,6 +1,5 @@
 # CONVENTIONS: <Subsystem name>
 
-**Status:** <Draft | Accepted>
 **Date:** YYYY-MM-DD
 **Record Type:** <Agent-Session | Retrospective>
 **Evidence:** <Source files and any supporting tests, build configuration, or history.>
@@ -12,9 +11,9 @@
 ## Convention index
 
 
-| ID | Title | Category | Scope | Status | Superseded by |
-| --- | --- | --- | --- | --- | --- |
-| V-NNNN | <Title> | <Category> | <Scope> | <Entry status> | <Replacement ID or dash> |
+| ID | Title | Category | Scope | Superseded by |
+| --- | --- | --- | --- | --- |
+| V-NNNN | <Title> | <Category> | <Scope> | <Replacement ID or dash> |
 
 ## Conventions
 
@@ -23,7 +22,6 @@
 - **Category:** <Naming | Variables | Constants | Types | Functions | Classes | ControlFlow | Errors | Logging | Files | Imports | Comments | Formatting | Testing | Patterns | Other>
 - **Scope:** <Paths and conditions where the practice applies. Identify exclusions.>
 - **Requirement:** SHOULD
-- **Status:** <Pending review | ACTIVE | SUPERSEDED | RETIRED>
 - **Rule:** <State one recurring practice. Identify the kind of declaration or operation it applies to.>
 - **Usage:** <State when to follow this practice in new or modified code.>
 
@@ -36,13 +34,12 @@
 - **Related:** <Related rule IDs. Identify any constraint or reviewed local override that takes precedence, or write "Not applicable.">
 - **Rationale:** <Give the documented reason and its source, or write "Not recorded.">
 - **Owner:** <Person or team, or "Not recorded.">
-- **History:** <Give the introduction and review dates if known. For a status change, record the reviewer, reason, and any predecessor or replacement ID.>
+- **History:** <Give the introduction and review dates if known. If a rule was replaced or retired, record when, why, and who reviewed the change, if known. Give the replacement ID when applicable.>
 
 ## Observations
 
 ### V-NNNN — <Short observation title>
 
-- **Status:** OBSERVED
 - **Category:** <Category from the index>
 - **Scope:** <Where this technique occurs.>
 - **Observation:** <Describe the specific declaration or implementation seen in the source.>

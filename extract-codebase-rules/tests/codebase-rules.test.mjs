@@ -23,7 +23,6 @@ function document(path) {
     : `- **Usage:** Name lookup keys consistently.\n\n| Example from an independent implementation | Evidence |\n| --- | --- |\n| \`firstKey\` | ${link(2)} |\n| \`otherKey\` | ${link(3)} |`;
   return `# ${basename(path, '.md')}: Cache
 
-**Status:** Draft
 **Date:** 2024-02-29
 **Record Type:** Retrospective
 **Evidence:** Source code.
@@ -34,10 +33,10 @@ The JavaScript cache in src/.
 
 ## ${type} index
 
-| ID | Title | Category | Scope | Status | Superseded by |
-| --- | --- | --- | --- | --- | --- |
-| ${id} | ${title} | ${category} | src/ | Pending review | — |
-| ${gap} | One use | Other | src/ | OBSERVED | — |
+| ID | Title | Category | Scope | Superseded by |
+| --- | --- | --- | --- | --- |
+| ${id} | ${title} | ${category} | src/ | — |
+| ${gap} | One use | Other | src/ | — |
 
 ## ${type}s
 
@@ -46,7 +45,6 @@ The JavaScript cache in src/.
 - **Category:** ${category}
 - **Scope:** src/
 - **Requirement:** ${constraint ? 'MUST' : 'SHOULD'}
-- **Status:** Pending review
 - **Rule:** ${title} in the cache.
 ${proof}
 - **Exceptions:** None found in the inspected scope.
@@ -59,7 +57,6 @@ ${proof}
 
 ### ${gap} — One use
 
-- **Status:** OBSERVED
 - **Category:** Other
 - **Scope:** src/
 - **Observation:** One cache guard.
@@ -136,9 +133,9 @@ test('accepts reviewed records, ordinary Markdown links, and literal code exampl
     '### C-9999 — Hidden heading',
     '-->',
   ].join('\n');
-  const text = document(constraints).replace('**Status:** Draft', '**Status:** Accepted')
+  const text = document(constraints)
     .replace('Last reviewed:** Pending review.', 'Last reviewed:** 2024-03-01 — Cache team')
-    .replaceAll('Pending review', 'ACTIVE').replace('The JavaScript cache in src/.', note)
+    .replace('The JavaScript cache in src/.', note)
     .replace('| C-0042 | Cache availability |', '| [C-0042](#c-0042--cache-availability) | Cache availability |');
   f.write(constraints, text);
   expect(f.validate(constraints), 0, /PASS/);
@@ -149,16 +146,17 @@ test('invalid changes fail against the corresponding template', t => {
   const cases = [
     [constraints, '2024-02-29', '2023-02-29', /date/i],
     [constraints, 'Last reviewed:** Pending review.', 'Last reviewed:** yesterday', /review/i],
-    [constraints, '**Status:** Draft', '**Status:** Accepted', /review/i],
+    [constraints, 'Last reviewed:** Pending review.', 'Last reviewed:** 2024-03-01', /reviewer/i],
+    [constraints, 'Last reviewed:** Pending review.', 'Last reviewed:** 2023-02-29 — Cache team', /review/i],
     [constraints, '## Observations', '## Unknown heading', /section/i],
     [constraints, '**Date:** 2024-02-29\n**Record Type:** Retrospective', '**Record Type:** Retrospective\n**Date:** 2024-02-29', /metadata/i],
     [constraints, '**Evidence:** Source code.', '**Evidence:** Source code.\n**Schema version:** 1.0', /metadata/i],
     [constraints, '### C-0042', '### V-0042', /ID|C-NNNN/i],
     [constraints, '### C-0099', '### C-0042', /duplicate/i],
-    [constraints, '| Pending review | — |', '| ACTIVE | — |', /index/i],
+    [constraints, '| State | src/ | — |', '| Other | src/ | — |', /index/i],
     [constraints, '| C-0042 | Cache availability', '| C-0043 | Cache availability', /index/i],
     [constraints, 'Requirement:** MUST', 'Requirement:** SHOULD', /requirement/i],
-    [constraints, '- **Status:** OBSERVED', '- **Requirement:** MUST\n- **Status:** OBSERVED', /field|observation/i],
+    [constraints, '- **Category:** Other', '- **Requirement:** MUST\n- **Category:** Other', /field|observation/i],
     [constraints, 'Category:** State', 'Category:** Unlisted', /category/i],
     [constraints, 'Related:** V-0017', 'Related:** V-17', /V-17/],
     [constraints, 'One cache guard.', '<Describe the behavior seen in the source.>', /placeholder/i],
@@ -180,6 +178,24 @@ test('invalid changes fail against the corresponding template', t => {
   }
 });
 
+test('rejects legacy Status fields and index columns in either document', t => {
+  const f = fixture(t);
+  const cases = [
+    ['**Date:**', '**Status:** Draft\n**Date:**', /metadata/i],
+    ['- **Rule:**', '- **Status:** Pending review\n- **Rule:**', /fields/i],
+    ['- **Category:** Other', '- **Status:** OBSERVED\n- **Category:** Other', /fields/i],
+    ['| Scope | Superseded by |', '| Scope | Status | Superseded by |', /index.*columns/i],
+  ];
+  for (const path of [constraints, conventions]) {
+    const original = document(path);
+    for (const [before, after, message] of cases) {
+      assert.ok(original.includes(before), before);
+      f.write(path, original.replace(before, after));
+      expect(f.validate(path), 1, message);
+    }
+  }
+});
+
 test('checks related IDs in the supplied documents and superseded entries', t => {
   const f = fixture(t);
   f.write(constraints, document(constraints).replace('Related:** V-0017', 'Related:** C-9999'));
@@ -187,7 +203,7 @@ test('checks related IDs in the supplied documents and superseded entries', t =>
   f.write(constraints, document(constraints).replace('Related:** V-0017', 'Related:** V-9999'));
   expect(f.validate(constraints), 0, /PASS/);
   expect(f.validate(constraints, conventions), 1, /V-9999/);
-  f.write(constraints, document(constraints).replaceAll('Pending review | —', 'SUPERSEDED | C-9999').replace('Status:** Pending review', 'Status:** SUPERSEDED'));
+  f.write(constraints, document(constraints).replace('| State | src/ | — |', '| State | src/ | C-9999 |'));
   expect(f.validate(constraints), 1, /C-9999/);
 });
 
