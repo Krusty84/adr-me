@@ -47,8 +47,3 @@
 | ID | Uninspected area or conflicting rule IDs | Missing evidence | Owner | Next action |
 | --- | --- | --- | --- | --- |
 | GAP-NNN | <Scope or rule IDs> | <What remains unknown> | <Owner or "Not recorded."> | <How to check it> |
-
-## Technical review
-
-**Maintainers:** <Person or team, or "Not recorded.">
-**Last reviewed:** <YYYY-MM-DD and reviewer, or "Pending review.">

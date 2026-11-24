@@ -7,7 +7,7 @@ If this skill is used,say:SKILL_EXTR_CODE_RULES_LOADED
 
 ## Goal
 
-Show engineers which rules a subsystem depends on and which practices its implementations share. Record the scope and source evidence for each finding.
+Show engineers and agents which rules a subsystem depends on and which practices its implementations share. Record the scope and source evidence for each finding.
 
 ## Files
 
@@ -44,7 +44,6 @@ Include these three fields after the title, in the order shown.
 | 3 | `Constraints` | `Conventions` |
 | 4 | `Observations` | `Observations` |
 | 5 | `Known gaps and open questions` | `Known gaps and open questions` |
-| 6 | `Technical review` | `Technical review` |
 
 - **Constraint.** Assign an unused `C-NNNN` ID and set `Requirement` to `MUST`. Cite the check, caller, or dependency that establishes the rule. State what changes if the rule is broken and how to verify it. One enforced dependency can establish a constraint.
 - **Convention.** Assign an unused `V-NNNN` ID and set `Requirement` to `SHOULD`. Give at least two examples from independent implementations that serve the same purpose. Cite each example in its table row and state when the practice applies.
@@ -67,7 +66,7 @@ Copy each requested template to its output path. Fill the copy with the findings
 
 ### Update
 
-Apply the matching template at the document's current path. Recheck affected entries and exceptions against the source. Preserve IDs, related entries, and review history. Keep the ID when an observation becomes a rule.
+Apply the matching template at the document's current path. Recheck affected entries and exceptions against the source. Preserve IDs, related entries, and each rule's `Owner` and `History`. Keep the ID when an observation becomes a rule.
 
 Record replacements and retirements in `History`. Put a replacement ID in `Superseded by`. In older documents, move any replacement or retirement details to these fields before you remove the `Status` fields and index column.
 
@@ -91,7 +90,7 @@ node "<skill-directory>/scripts/validate-codebase-rules.mjs" docs/CONSTRAINTS.md
 
 ### Validation Rules
 
-- The validator checks the title, field and section order, dates, review fields, template placeholders, and LF line endings.
+- The validator checks the title, field and section order, document date, template placeholders, and LF line endings.
 - It checks entry and gap IDs, categories, requirements, and index rows. It checks related and replacement IDs against the supplied documents.
 - It checks that source links resolve to the stated file and line inside the repository. For each convention, it requires at least two distinct example rows with source links.
 
@@ -99,4 +98,3 @@ node "<skill-directory>/scripts/validate-codebase-rules.mjs" docs/CONSTRAINTS.md
 
 1. Correct validation errors and run the command again until it exits with status 0.
 2. Read the cited lines. Confirm that they support each claim and that convention examples are independent. Check index scope, reciprocal links, duplicate rules, and gaps. Review the English text against ASD-STE100.
-3. Put the date and reviewer in `Last reviewed` after an engineer familiar with the subsystem reviews the document. Use `Pending review.` when the document awaits review. Mark the subsystem research complete after both documents have been reviewed.

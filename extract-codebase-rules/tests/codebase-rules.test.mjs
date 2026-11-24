@@ -68,11 +68,6 @@ ${proof}
 | ID | Uninspected area or conflicting rule IDs | Missing evidence | Owner | Next action |
 | --- | --- | --- | --- | --- |
 | GAP-001 | CLI | Startup order | Not recorded. | Inspect callers. |
-
-## Technical review
-
-**Maintainers:** Cache team
-**Last reviewed:** Pending review.
 `;
 }
 
@@ -111,21 +106,21 @@ test('an installed validator checks each file and the pair at custom paths', t =
 
 test('empty template sections and retained template comments are valid', t => {
   const f = fixture(t);
-  let text = document(constraints);
-  for (const section of ['Constraint index', 'Constraints', 'Observations', 'Known gaps and open questions']) {
-    text = text.replace(new RegExp('^## ' + section + '\\n[\\s\\S]*?(?=^## )', 'm'), `## ${section}\n\nNone recorded.\n\n`);
-  }
-  text = text.replace('## Scope', '<!-- Copy C-NNNN. -->\n## Scope');
+  const emptyHeadings = ['## Constraint index', '## Constraints', '## Observations', '## Known gaps and open questions'];
+  const text = document(constraints).split(/(?=^## )/m).map(section => {
+    const [heading] = section.split('\n', 1);
+    return emptyHeadings.includes(heading) ? `${heading}\n\nNone recorded.\n\n` : section;
+  }).join('').replace('## Scope', '<!-- Copy C-NNNN. -->\n## Scope');
   f.write(constraints, text);
   expect(f.validate(constraints), 0, /PASS/);
 });
 
-test('accepts reviewed records, ordinary Markdown links, and literal code examples', t => {
+test('accepts ordinary Markdown links and literal code examples', t => {
   const f = fixture(t);
   const note = [
     'The API uses YYYY-MM-DD. See [Lifecycle](#Lifecycle).',
     '````md',
-    '## Technical review',
+    '## Example heading',
     '[unverified:700](../missing#L700)',
     '```',
     '````',
@@ -134,7 +129,6 @@ test('accepts reviewed records, ordinary Markdown links, and literal code exampl
     '-->',
   ].join('\n');
   const text = document(constraints)
-    .replace('Last reviewed:** Pending review.', 'Last reviewed:** 2024-03-01 — Cache team')
     .replace('The JavaScript cache in src/.', note)
     .replace('| C-0042 | Cache availability |', '| [C-0042](#c-0042--cache-availability) | Cache availability |');
   f.write(constraints, text);
@@ -145,9 +139,6 @@ test('invalid changes fail against the corresponding template', t => {
   const f = fixture(t);
   const cases = [
     [constraints, '2024-02-29', '2023-02-29', /date/i],
-    [constraints, 'Last reviewed:** Pending review.', 'Last reviewed:** yesterday', /review/i],
-    [constraints, 'Last reviewed:** Pending review.', 'Last reviewed:** 2024-03-01', /reviewer/i],
-    [constraints, 'Last reviewed:** Pending review.', 'Last reviewed:** 2023-02-29 — Cache team', /review/i],
     [constraints, '## Observations', '## Unknown heading', /section/i],
     [constraints, '**Date:** 2024-02-29\n**Record Type:** Retrospective', '**Record Type:** Retrospective\n**Date:** 2024-02-29', /metadata/i],
     [constraints, '**Evidence:** Source code.', '**Evidence:** Source code.\n**Schema version:** 1.0', /metadata/i],
@@ -175,6 +166,14 @@ test('invalid changes fail against the corresponding template', t => {
     assert.ok(original.includes(before), before);
     f.write(path, original.replace(before, after));
     expect(f.validate(path), 1, message);
+  }
+});
+
+test('rejects the legacy Technical review section in either document', t => {
+  const f = fixture(t);
+  for (const path of [constraints, conventions]) {
+    f.write(path, document(path) + '\n## Technical review\n\n**Maintainers:** Cache team\n**Last reviewed:** Pending review.\n');
+    expect(f.validate(path), 1, /sections/i);
   }
 });
 

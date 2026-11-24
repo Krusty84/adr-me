@@ -235,7 +235,7 @@ function validate(file, root, counts) {
   const doc = split(text);
   const model = split(template);
   sameOrder(doc.items, model.items, "Sections");
-  const [, index, rules, observed, gaps, review] = model.items.keys();
+  const [, index, rules, observed, gaps] = model.items.keys();
   for (const [name, body] of doc.items) {
     check(body && !/^#{1,2} |^#{4,6} /m.test(body), `${name}: empty section or unexpected heading`);
     if (name !== rules && name !== observed) check(!/^### /m.test(body), `Unexpected heading in ${name}`);
@@ -243,13 +243,6 @@ function validate(file, root, counts) {
   const metadata = fields(doc.intro, "Metadata");
   checkFields(metadata, fields(model.intro, "Template"), "Metadata");
   check(validDate(metadata.get("Date")), "Invalid document date");
-  const reviewed = fields(doc.items.get(review), review);
-  checkFields(reviewed, fields(model.items.get(review), review), review);
-  const last = reviewed.get("Last reviewed");
-  if (!/^Pending review\.?$/.test(last)) {
-    const date = last.match(/\b\d{4}-\d{2}-\d{2}\b/);
-    check(date && validDate(date[0]) && /[\p{L}\p{N}]/u.test(last.replace(date[0], "")), "Invalid Last reviewed date or reviewer");
-  }
   const categories = model.items.get(rules).match(/^- \*\*Category:\*\* <(.+)>$/m)[1].split(" | ");
   const findings = new Map();
   const prefix = type === "CONSTRAINTS" ? "C" : "V";
