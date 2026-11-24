@@ -7,7 +7,7 @@ If this skill is used,say:SKILL_EXTR_CODE_RULES_LOADED
 
 ## Goal
 
-Show engineers and agents which rules a subsystem depends on and which practices its implementations share. Record the scope and source evidence for each finding.
+Summarize the codebase for engineers and agents. Document what changes must preserve and which practices to follow. Record the scope and source evidence for each finding.
 
 ## Files
 
@@ -30,7 +30,7 @@ Use the matching template as a read-only source. Keep the exact headings, fields
 
 Use this order for `CONSTRAINTS.md`.
 
-1. `# CONSTRAINTS: <Subsystem name>`
+1. `# CONSTRAINTS: <Repository name>`
 2. `**Date:** YYYY-MM-DD`
 3. `**Record Type:** <Agent-Session | Retrospective>`
 4. `**Evidence:** <Source files and any supporting tests, build configuration, or history.>`
@@ -42,7 +42,7 @@ Use this order for `CONSTRAINTS.md`.
 
 Use this order for `CONVENTIONS.md`.
 
-1. `# CONVENTIONS: <Subsystem name>`
+1. `# CONVENTIONS: <Repository name>`
 2. `**Date:** YYYY-MM-DD`
 3. `**Record Type:** <Agent-Session | Retrospective>`
 4. `**Evidence:** <Source files and any supporting tests, build configuration, or history.>`
@@ -54,30 +54,31 @@ Use this order for `CONVENTIONS.md`.
 
 Set `Date` to the date you create or update the document. Use `Agent-Session` for facts you record during implementation or `Retrospective` for facts you reconstruct from existing code. In `Evidence`, identify the source files and any supporting evidence you used.
 
-- **Constraint.** Assign an unused `C-NNNN` ID and set `Requirement` to `MUST`. Cite the check, caller, or dependency that establishes the rule. State what changes if the rule is broken and how to verify it. One enforced dependency can establish a constraint.
-- **Convention.** Assign an unused `V-NNNN` ID and set `Requirement` to `SHOULD`. Give at least two examples from independent implementations that serve the same purpose. Cite each example in its table row and state when the practice applies.
+- Start `Scope` with a brief conclusion for the codebase. Then state which parts you inspected. Merge entries that describe the same rule.
+- **Constraint.** Assign an unused `C-NNNN` ID and set `Requirement` to `MUST`. Cite the check, caller, or dependency that establishes the rule. State what changes if the rule is broken and how to verify it. Include constraints that affect operation, builds, compatibility, or data. One enforced dependency can establish a constraint. If a constraint applies to one part of the codebase, state where it applies and why it matters to the system.
+- **Convention.** Assign an unused `V-NNNN` ID and set `Requirement` to `SHOULD`. Include recurring practices that guide future changes. Give at least two examples from independent implementations that serve the same purpose. Cite each example in its table row. State where the practice applies and cite significant exceptions.
 - **Observation.** If the evidence shows only an isolated technique, put the finding in `Observations`. Use the document's ID prefix, cite the source, and record the open question.
 - Include one index row per rule or observation. Use `None recorded.` for an empty index, rules section, observations section, or gaps section.
 
 ## Workflow
 
-Work on the requested document or pair. Use the paths the user gives. Otherwise, locate existing documents for that subsystem outside the skill directory. Place a new companion beside the existing document. Use the default paths when neither exists.
+Prepare one pair of documents for the repository by default. Work on one document if the user asks for it. Use the paths the user gives. Otherwise, locate the existing repository documents outside the skill directory. Place a new companion beside the existing document. Use the default paths in `docs/` when neither exists.
 
 ### Inspect the subsystem
 
-1. Record the directories, languages, platforms, and build configurations inspected. Trace dependencies, active library versions, upgrade limits, interfaces, lifecycle, state, and error paths.
-2. Compare implementations that serve the same purpose. Inspect naming, file layout, and recurring code patterns. Check other modules and configurations for exceptions. Record where each practice applies.
+1. Inspect the full codebase. Identify the main modules, entry points, contracts, and build configurations. Trace relevant dependencies, active library versions, upgrade limits, lifecycle, state, and error paths.
+2. Compare independent implementations that serve the same purpose. Inspect naming, file layout, and recurring code patterns across modules. Check other modules and configurations for exceptions. Record where each practice applies.
 3. Link a constraint and a convention for the same mechanism in both `Related` fields. Record conflicting evidence and uninspected areas in `Known gaps and open questions`.
 
 ### Create
 
-Copy each requested template to its output path. Fill the copy with the findings and their index rows.
+Copy each requested template to its output path. Fill the copy with the findings. Use the index to show the rules and their scope at a glance.
 
 ### Update
 
-Apply the matching template at the document's current path. Recheck affected entries and exceptions against the source. Preserve IDs, related entries, and each rule's `Owner` and `History`. Keep the ID when an observation becomes a rule.
+Apply the matching template at the document's current path. Recheck affected entries and exceptions against the source. Preserve IDs and links between entries. Keep the ID when an observation becomes a rule.
 
-Record replacements and retirements in `History`. Put a replacement ID in `Superseded by`. In older documents, move any replacement or retirement details to these fields before you remove the `Status` fields and index column.
+Put a replacement ID in `Superseded by`.
 
 ## Validation (mandatory)
 
@@ -91,7 +92,7 @@ For one document, pass its path.
 node "<skill-directory>/scripts/validate-codebase-rules.mjs" docs/CONSTRAINTS.md --repo .
 ```
 
-For a pair from the same subsystem, pass both paths to check references between documents.
+For the repository's pair of documents, pass both paths to check references between documents.
 
 ```sh
 node "<skill-directory>/scripts/validate-codebase-rules.mjs" docs/CONSTRAINTS.md docs/CONVENTIONS.md --repo .

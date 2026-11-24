@@ -1,4 +1,4 @@
-# CONVENTIONS: <Subsystem name>
+# CONVENTIONS: <Repository name>
 
 **Date:** YYYY-MM-DD
 **Record Type:** <Agent-Session | Retrospective>
@@ -6,7 +6,7 @@
 
 ## Scope
 
-<Name the repository and subsystem. List the directories, languages, platforms, and build configurations inspected.>
+<Summarize the recurring practices that guide changes across the codebase. State what you inspected, including the main modules, languages, platforms, and build configurations.>
 
 ## Convention index
 

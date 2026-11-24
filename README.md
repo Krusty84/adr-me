@@ -111,7 +111,7 @@ Tell the agent to read the required skill's `SKILL.md`. Example requests:
 ```text
 Use create-adr-md to record the accepted decision from this session.
 Use create-update-architecture-md to describe the current system in docs/ARCHITECTURE.md
-Use extract-codebase-rules to inspect the subsystem and create docs/CONSTRAINTS.md and docs/CONVENTIONS.md.
+Use extract-codebase-rules to inspect the whole repository and summarize its constraints and conventions in docs/CONSTRAINTS.md and docs/CONVENTIONS.md.
 ```
 
 `ADR.md` use `docs/adr/NNNN-short-title.md`. New architecture documents use `docs/ARCHITECTURE.md` existing documents keep their current path.
