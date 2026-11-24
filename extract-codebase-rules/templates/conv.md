@@ -4,10 +4,6 @@
 **Date:** YYYY-MM-DD
 **Record Type:** <Agent-Session | Retrospective>
 **Evidence:** <Source files and any supporting tests, build configuration, or history.>
-**Schema version:** 1.0
-
-<!-- Date records creation or update. Use Agent-Session for facts recorded during implementation and Retrospective for facts reconstructed from existing code. -->
-<!-- Keep the section order. Replace all placeholders. Repeat entries as needed. Use "None recorded." for an empty section. -->
 
 ## Scope
 
@@ -15,7 +11,6 @@
 
 ## Convention index
 
-<!-- Use one row per finding. Assign an unused V-NNNN ID. Keep it when the finding moves between sections or changes status. -->
 
 | ID | Title | Category | Scope | Status | Superseded by |
 | --- | --- | --- | --- | --- | --- |
@@ -64,5 +59,3 @@
 
 **Maintainers:** <Person or team, or "Not recorded.">
 **Last reviewed:** <YYYY-MM-DD and reviewer, or "Pending review.">
-
-<!-- Use Accepted for the document and ACTIVE for a rule only after technical review by an engineer familiar with the subsystem. -->

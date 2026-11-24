@@ -27,7 +27,6 @@ function document(path) {
 **Date:** 2024-02-29
 **Record Type:** Retrospective
 **Evidence:** Source code.
-**Schema version:** 1.0
 
 ## Scope
 
@@ -93,7 +92,7 @@ function fixture(t) {
   write('src/cache keys.js', 'if (!cache) throw Error();\nconst firstKey = 1;\nconst otherKey = 2;\n');
   write(constraints, document(constraints));
   write(conventions, document(conventions));
-  const run = (...args) => spawnSync(process.execPath, [join(installed, 'scripts/validate-research.mjs'), ...args], { cwd: dir, encoding: 'utf8' });
+  const run = (...args) => spawnSync(process.execPath, [join(installed, 'scripts/validate-codebase-rules.mjs'), ...args], { cwd: dir, encoding: 'utf8' });
   const validate = (...paths) => run(...paths, '--repo', repo);
   return { repo, dir, write, run, validate };
 }
@@ -109,7 +108,7 @@ test('an installed validator checks each file and the pair at custom paths', t =
   expect(f.validate(constraints), 0, /PASS/);
   expect(f.validate(conventions), 0, /PASS/);
   expect(f.validate(conventions, constraints), 0, /PASS/);
-  expect(f.run('--help'), 0, /Usage/);
+  expect(f.run('--help'), 0, /Usage: node validate-codebase-rules\.mjs/);
   expect(f.run('--unknown'), 2, /option/i);
 });
 
@@ -153,7 +152,7 @@ test('invalid changes fail against the corresponding template', t => {
     [constraints, '**Status:** Draft', '**Status:** Accepted', /review/i],
     [constraints, '## Observations', '## Unknown heading', /section/i],
     [constraints, '**Date:** 2024-02-29\n**Record Type:** Retrospective', '**Record Type:** Retrospective\n**Date:** 2024-02-29', /metadata/i],
-    [constraints, '**Schema version:** 1.0', '**Schema version:** 2.0', /schema version/i],
+    [constraints, '**Evidence:** Source code.', '**Evidence:** Source code.\n**Schema version:** 1.0', /metadata/i],
     [constraints, '### C-0042', '### V-0042', /ID|C-NNNN/i],
     [constraints, '### C-0099', '### C-0042', /duplicate/i],
     [constraints, '| Pending review | — |', '| ACTIVE | — |', /index/i],

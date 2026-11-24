@@ -5,7 +5,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { AGENTS, SKILLS, commitSummary, findRepository, install, normalizeCodePath } from "../lib/install.mjs";
+import { AGENTS, PUSH_CHECK_SKILLS, SKILLS, commitSummary, findRepository, install, normalizeCodePath } from "../lib/install.mjs";
 
 const usage = "Usage: adr-me [init]\n\nStart the interactive skill installer. Installation flags are not supported.";
 const cancelled = Symbol("cancelled");
@@ -14,14 +14,14 @@ async function initialize(p) {
   const { version, author, license } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   p.intro(`adr-me v${version}`);
   p.note([
-    "adr-me: ADR and ARCHITECTURE skills for AI agents.",
+    "Document decisions, architecture, and codebase rules with AI agents.",
     "-",
     "For developers and engineers who use agents in their work",
     "but don't want to lose control over the decisions made",
     "and what is happening with their system overall.",
     "-",
     "Shared checks: .github/scripts/adr-me/",
-    "Optional: Git pre-push hook and GitHub Actions.",
+    "Optional push checks for ADR and architecture documents.",
     "-",
     `Author: ${author.name}, License: ${license}`,
     `Website: ${author.url}`,
@@ -54,13 +54,13 @@ async function initialize(p) {
     const skills = selected === "all" ? SKILLS : [selected];
     let hook = false;
     let actions = false;
-    if (repository) {
+    if (repository && PUSH_CHECK_SKILLS.some(skill => skills.includes(skill))) {
       hook = await ask(p.confirm({ message: "Install a local Git pre-push hook?", initialValue: false }));
       actions = await ask(p.confirm({ message: "Install a GitHub Actions workflow?", initialValue: false }));
-    } else p.log.info("No Git working tree. Hooks and GitHub Actions are unavailable.");
+    } else if (!repository) p.log.info("No Git working tree. Hooks and GitHub Actions are unavailable.");
 
     const codePaths = [];
-    if ((hook || actions) && skills.includes(SKILLS[0])) {
+    if ((hook || actions) && skills.includes("create-adr-md")) {
       p.log.info(`Code paths are relative to ${repository}`);
       do {
         const path = await ask(p.text({

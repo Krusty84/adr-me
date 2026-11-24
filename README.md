@@ -1,12 +1,14 @@
 # adr-me
 
-Create `ADR.md` (Architecture Decision Records) and `ARCHITECTURE.md` documents with an AI agent.
+Use an AI agent to document architecture decisions, system architecture, and codebase rules.
 
 ## What Is This?
 
-adr-me contains two agent skills (each skill includes a document template and a validator):
-[create-adr-md](create-adr-md/SKILL.md) records accepted technical decisions
-[create-update-architecture-md](create-update-architecture-md/SKILL.md) describes the current system. 
+adr-me includes three skills with templates and validators.
+
+- [create-adr-md](create-adr-md/SKILL.md) records accepted technical decisions in Architecture Decision Records (ADRs).
+- [create-update-architecture-md](create-update-architecture-md/SKILL.md) describes the current system in `ARCHITECTURE.md`.
+- [extract-codebase-rules](extract-codebase-rules/SKILL.md) documents technical constraints in `CONSTRAINTS.md` and recurring practices in `CONVENTIONS.md`.
 
 <img width="363" height="309" alt="image" src="https://github.com/user-attachments/assets/b58f5734-b2d6-4932-93ac-54e16937ee06" />
 
@@ -20,6 +22,7 @@ adr-me contains two agent skills (each skill includes a document template and a 
 - Link `ADR.md` to implementation commits and source symbols.
 - Create `ARCHITECTURE.md` from an agent session or Git history.
 - Create and update `ARCHITECTURE.md` with source links and PlantUML context and component diagrams.
+- Analyzing the code base to identify constraints, conventions/rules.
 - Check `ADR.md` and `ARCHITECTURE.md` documents structure, source references, and `ADR.md` commit links.
 - Check `ADR.md` and `ARCHITECTURE.md` documents before pushes to `main`. 
 - Report `ADR.md` and `ARCHITECTURE.md` validation issues and code commits without valid `ADR.md` links as warnings in GitHub Actions.
@@ -108,6 +111,7 @@ Tell the agent to read the required skill's `SKILL.md`. Example requests:
 ```text
 Use create-adr-md to record the accepted decision from this session.
 Use create-update-architecture-md to describe the current system in docs/ARCHITECTURE.md
+Use extract-codebase-rules to inspect the subsystem and create docs/CONSTRAINTS.md and docs/CONVENTIONS.md.
 ```
 
 `ADR.md` use `docs/adr/NNNN-short-title.md`. New architecture documents use `docs/ARCHITECTURE.md` existing documents keep their current path.

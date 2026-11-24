@@ -9,7 +9,7 @@ import { lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
-const usage = "Usage: node validate-research.mjs <document.md> [companion.md] [--repo <root>]";
+const usage = "Usage: node validate-codebase-rules.mjs <document.md> [companion.md] [--repo <root>]";
 const emptySection = "None recorded.";
 
 function check(condition, message) {

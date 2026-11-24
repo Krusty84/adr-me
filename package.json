@@ -2,7 +2,7 @@
   "name": "adr-me",
   "version": "1.0.3",
   "license": "MIT",
-  "description": "Install ADR.md and ARCHITECTURE.md skills for AI agents.",
+  "description": "Install AI agent skills for architecture decisions, system architecture, and codebase rules.",
   "author": {
     "name": "Alexey Sedoykin",
     "url": "https://www.sedoykin.com/"
@@ -58,7 +58,10 @@
     "create-adr-md/references/",
     "create-update-architecture-md/SKILL.md",
     "create-update-architecture-md/scripts/",
-    "create-update-architecture-md/templates/"
+    "create-update-architecture-md/templates/",
+    "extract-codebase-rules/SKILL.md",
+    "extract-codebase-rules/scripts/",
+    "extract-codebase-rules/templates/"
   ],
   "dependencies": {
     "@clack/prompts": "1.9.0"

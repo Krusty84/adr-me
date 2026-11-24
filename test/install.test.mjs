@@ -13,6 +13,7 @@ const checksPath = '.github/scripts/adr-me';
 const resources = {
   'create-adr-md': ['scripts/validate-adr.mjs', 'templates/adr.md', 'references/types.md'],
   'create-update-architecture-md': ['scripts/validate-arch.mjs', 'templates/arch.md'],
+  'extract-codebase-rules': ['scripts/validate-codebase-rules.mjs', 'templates/cons.md', 'templates/conv.md'],
 };
 
 function fixture(t) {
@@ -36,53 +37,58 @@ function fixture(t) {
 }
 
 for (const scope of ['project', 'global']) {
-  for (const skills of [[SKILLS[0]], [SKILLS[1]], SKILLS]) {
+  for (const skills of [...Object.keys(resources).map(skill => [skill]), SKILLS]) {
     for (const [hook, actions] of [[false, false], [true, false], [false, true], [true, true]]) {
       test(`${scope} ${skills.join(', ')} with hook=${hook} actions=${actions}`, t => {
         const repo = fixture(t);
         const components = repo.setup({ scope, skills, hook, actions });
+        const adr = skills.includes('create-adr-md');
+        const arch = skills.includes('create-update-architecture-md');
+        const hasChecks = (adr || arch) && (hook || actions);
         for (const component of components) assert.equal(component.status, 'installed', `${component.name}: ${component.reason}`);
         assert.equal(existsSync(join(repo.repository, '.adr-me')), false);
-        assert.equal(existsSync(join(repo.repository, checksPath)), hook || actions);
+        assert.equal(existsSync(join(repo.repository, checksPath)), hasChecks);
+        if (!hasChecks) assert.ok(components.every(({ kind }) => kind === 'skill'));
 
         for (const agent of Object.keys(AGENTS)) {
           const base = join(scope === 'project' ? repo.repository : repo.userDirectory, AGENTS[agent][scope]);
-          for (const skill of SKILLS) {
+          for (const skill of Object.keys(resources)) {
             assert.equal(existsSync(join(base, skill)), skills.includes(skill));
             if (!skills.includes(skill)) continue;
             assert.ok(existsSync(join(base, skill, 'SKILL.md')));
             assert.equal(existsSync(join(base, skill, 'tests')), false);
             for (const resource of resources[skill]) {
               const installed = join(repo.repository, checksPath, skill, resource);
-              assert.equal(existsSync(installed), hook || actions);
-              if (hook || actions) assert.deepEqual(readFileSync(installed), readFileSync(join(base, skill, resource)));
+              const agentFile = join(base, skill, resource);
+              assert.ok(existsSync(agentFile), agentFile);
+              const shared = hasChecks && skill !== 'extract-codebase-rules';
+              assert.equal(existsSync(installed), shared);
+              if (shared) assert.deepEqual(readFileSync(installed), readFileSync(agentFile));
             }
           }
         }
 
         for (const skill of SKILLS) {
-          assert.equal(existsSync(join(repo.repository, checksPath, skill)), (hook || actions) && skills.includes(skill));
+          assert.equal(existsSync(join(repo.repository, checksPath, skill)), hasChecks && skills.includes(skill) && skill !== 'extract-codebase-rules');
           assert.equal(existsSync(join(repo.repository, checksPath, skill, 'SKILL.md')), false);
           assert.equal(existsSync(join(repo.repository, checksPath, skill, 'tests')), false);
         }
-        const adr = skills.includes(SKILLS[0]);
-        const arch = skills.includes(SKILLS[1]);
         for (const [script, expected] of [
           ['adr-policy.mjs', adr && (hook || actions)], ['check-adr.mjs', adr && hook],
           ['audit-adr.mjs', adr && actions], ['check-architecture.mjs', arch && (hook || actions)],
         ]) assert.equal(existsSync(join(repo.repository, checksPath, script)), expected);
 
         const hookPath = join(repo.repository, repo.git('rev-parse', '--git-path', 'hooks/pre-push'));
-        assert.equal(existsSync(hookPath), hook);
-        if (hook) {
+        assert.equal(existsSync(hookPath), hasChecks && hook);
+        if (hasChecks && hook) {
           assert.ok(statSync(hookPath).mode & 0o100);
           const content = readFileSync(hookPath, 'utf8');
           assert.equal(content.includes(`${checksPath}/check-adr.mjs`), adr);
           assert.equal(content.includes(`${checksPath}/check-architecture.mjs`), arch);
         }
         const workflow = join(repo.repository, '.github/workflows/adr-check.yml');
-        assert.equal(existsSync(workflow), actions);
-        if (actions) {
+        assert.equal(existsSync(workflow), hasChecks && actions);
+        if (hasChecks && actions) {
           const content = readFileSync(workflow, 'utf8');
           assert.equal(content.includes(`${checksPath}/audit-adr.mjs`), adr);
           assert.equal(content.includes(`${checksPath}/check-architecture.mjs --audit`), arch);
@@ -90,13 +96,26 @@ for (const scope of ['project', 'global']) {
         if (adr && (hook || actions)) assert.ok(readFileSync(join(repo.repository, checksPath, 'adr-policy.mjs'), 'utf8')
           .includes('const CODE_PATHS = ["src/"];'));
         const { status } = commitSummary(components, repo.repository);
-        assert.equal(status.includes(`${checksPath}/`), hook || actions);
+        assert.equal(status.includes(`${checksPath}/`), hasChecks);
         assert.ok(!status.includes('.adr-me/'));
         assert.ok(!status.includes('.git/hooks/'));
       });
     }
   }
 }
+
+test('All adds the codebase rules skill and keeps the same push checks', t => {
+  const repo = fixture(t);
+  const initial = repo.setup({ skills: ['create-adr-md', 'create-update-architecture-md'] });
+  const all = repo.setup();
+  const checks = components => components.filter(({ kind }) => kind !== 'skill');
+  const expected = checks(initial).flatMap(({ written }) => written).sort();
+  assert.ok(expected.length > 0);
+  assert.ok(checks(all).every(({ status }) => status === 'unchanged'));
+  assert.deepEqual(checks(all).flatMap(({ identical }) => identical).sort(), expected);
+  for (const { project } of Object.values(AGENTS))
+    assert.ok(existsSync(join(repo.repository, project, 'extract-codebase-rules', 'SKILL.md')));
+});
 
 test('repeating installation keeps identical files and restores missing files', t => {
   const repo = fixture(t);
