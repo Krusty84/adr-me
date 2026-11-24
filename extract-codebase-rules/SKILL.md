@@ -24,7 +24,7 @@ Use the templates without adding, deleting, renaming, or reordering its attribut
 - Write both documents in English. Follow ASD-STE100, Issue 9. Use short sentences and active voice. Preserve code identifiers.
 - Describe the current implementation. Use source code as the primary evidence. Use tests, build configuration, documentation, comments, and history to clarify what the code does.
 - Cite the source line for each finding and exception. Show the repository path and line number in the link text. Make the target relative to the document, as in `[src/cache.js:42](../src/cache.js#L42)` for a document in `docs/`.
-- Give a reason only when a source supports it. Use `Not recorded.` for an unknown rationale or owner.
+- Give a reason only when a source supports it. Use `Not recorded.` for an unknown rationale.
 
 ## Fixed document contract
 

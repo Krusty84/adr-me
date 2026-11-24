@@ -29,8 +29,6 @@
 - **Exceptions:** <Cite each exception or reviewed override and its scope, or write "None found in the inspected scope.">
 - **Related:** <Give related rule IDs. Link entries for the same mechanism in both directions, or write "Not applicable.">
 - **Rationale:** <Give the documented reason and its source, or write "Not recorded.">
-- **Owner:** <Person or team, or "Not recorded.">
-- **History:** <Give the introduction and review dates if known. If a rule was replaced or retired, record when, why, and who reviewed the change, if known. Give the replacement ID when applicable.>
 
 ## Observations
 
@@ -44,6 +42,6 @@
 
 ## Known gaps and open questions
 
-| ID | Uninspected area or conflicting rule IDs | Missing evidence | Owner | Next action |
-| --- | --- | --- | --- | --- |
-| GAP-NNN | <Scope or rule IDs> | <What remains unknown> | <Owner or "Not recorded."> | <How to check it> |
+| ID | Uninspected area or conflicting rule IDs | Missing evidence | Next action |
+| --- | --- | --- | --- |
+| GAP-NNN | <Scope or rule IDs> | <What remains unknown> | <How to check it> |

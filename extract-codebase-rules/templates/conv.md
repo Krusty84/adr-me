@@ -33,8 +33,6 @@
 - **Exceptions:** <Cite counterexamples. Give the scope or condition that selects each variant, or write "None found in the inspected scope.">
 - **Related:** <Related rule IDs. Identify any constraint or reviewed local override that takes precedence, or write "Not applicable.">
 - **Rationale:** <Give the documented reason and its source, or write "Not recorded.">
-- **Owner:** <Person or team, or "Not recorded.">
-- **History:** <Give the introduction and review dates if known. If a rule was replaced or retired, record when, why, and who reviewed the change, if known. Give the replacement ID when applicable.>
 
 ## Observations
 
@@ -48,6 +46,6 @@
 
 ## Known gaps and open questions
 
-| ID | Uninspected area or conflicting rule IDs | Missing evidence | Owner | Next action |
-| --- | --- | --- | --- | --- |
-| GAP-NNN | <Scope or rule IDs> | <What remains unknown> | <Owner or "Not recorded."> | <How to check it> |
+| ID | Uninspected area or conflicting rule IDs | Missing evidence | Next action |
+| --- | --- | --- | --- |
+| GAP-NNN | <Scope or rule IDs> | <What remains unknown> | <How to check it> |

@@ -50,8 +50,6 @@ ${proof}
 - **Exceptions:** None found in the inspected scope.
 - **Related:** ${constraint ? 'V-0017' : 'C-0042'}
 - **Rationale:** Not recorded.
-- **Owner:** Not recorded.
-- **History:** First review pending.
 
 ## Observations
 
@@ -65,9 +63,9 @@ ${proof}
 
 ## Known gaps and open questions
 
-| ID | Uninspected area or conflicting rule IDs | Missing evidence | Owner | Next action |
-| --- | --- | --- | --- | --- |
-| GAP-001 | CLI | Startup order | Not recorded. | Inspect callers. |
+| ID | Uninspected area or conflicting rule IDs | Missing evidence | Next action |
+| --- | --- | --- | --- |
+| GAP-001 | CLI | Startup order | Inspect callers. |
 `;
 }
 
@@ -177,13 +175,16 @@ test('rejects the legacy Technical review section in either document', t => {
   }
 });
 
-test('rejects legacy Status fields and index columns in either document', t => {
+test('rejects legacy fields and table columns in either document', t => {
   const f = fixture(t);
   const cases = [
     ['**Date:**', '**Status:** Draft\n**Date:**', /metadata/i],
     ['- **Rule:**', '- **Status:** Pending review\n- **Rule:**', /fields/i],
+    ['- **Rationale:** Not recorded.', '- **Rationale:** Not recorded.\n- **Owner:** Cache team', /fields/i],
+    ['- **Rationale:** Not recorded.', '- **Rationale:** Not recorded.\n- **History:** Added in the first release.', /fields/i],
     ['- **Category:** Other', '- **Status:** OBSERVED\n- **Category:** Other', /fields/i],
     ['| Scope | Superseded by |', '| Scope | Status | Superseded by |', /index.*columns/i],
+    ['| Missing evidence | Next action |', '| Missing evidence | Owner | Next action |', /known gaps.*columns/i],
   ];
   for (const path of [constraints, conventions]) {
     const original = document(path);
