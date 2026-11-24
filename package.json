@@ -1,6 +1,6 @@
 {
   "name": "adr-me",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "license": "MIT",
   "description": "Install AI agent skills for architecture decisions, system architecture, and codebase rules.",
   "author": {

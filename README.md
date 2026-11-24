@@ -22,7 +22,7 @@ adr-me includes three skills with templates and validators.
 - Link `ADR.md` to implementation commits and source symbols.
 - Create `ARCHITECTURE.md` from an agent session or Git history.
 - Create and update `ARCHITECTURE.md` with source links and PlantUML context and component diagrams.
-- Analyzing the code base to identify constraints, conventions/rules.
+- Analyzing the code base to identify constraints, conventions/rules, and create the `CONSTRAINTS.md` and `CONVENTIONS.md` documents.
 - Check `ADR.md` and `ARCHITECTURE.md` documents structure, source references, and `ADR.md` commit links.
 - Check `ADR.md` and `ARCHITECTURE.md` documents before pushes to `main`. 
 - Report `ADR.md` and `ARCHITECTURE.md` validation issues and code commits without valid `ADR.md` links as warnings in GitHub Actions.
