@@ -35,10 +35,11 @@ Use this order for `CONSTRAINTS.md`.
 3. `**Record Type:** <Agent-Session | Retrospective>`
 4. `**Evidence:** <Source files and any supporting tests, build configuration, or history.>`
 5. `## Scope`
-6. `## Constraint index`
-7. `## Constraints`
-8. `## Observations`
-9. `## Known gaps and open questions`
+6. `## Technology versions`
+7. `## Constraint index`
+8. `## Constraints`
+9. `## Observations`
+10. `## Known gaps and open questions`
 
 Use this order for `CONVENTIONS.md`.
 
@@ -59,6 +60,14 @@ Set `Date` to the date you create or update the document. Use `Agent-Session` fo
 - **Convention.** Assign an unused `V-NNNN` ID and set `Requirement` to `SHOULD`. Include recurring practices that guide future changes. Give at least two examples from independent implementations that serve the same purpose. Cite each example in its table row. State where the practice applies and cite significant exceptions.
 - **Observation.** If the evidence shows only an isolated technique, put the finding in `Observations`. Use the document's ID prefix, cite the source, and record the open question.
 - Include one index row per rule or observation. Use `None recorded.` for an empty index, rules section, observations section, or gaps section.
+
+### Technology versions
+
+Include frameworks, direct dependencies, runtimes, build tools, and runtime images. Include transitive dependencies that affect the build, runtime, or compatibility. Check dependency manifests, lock files, build settings, CI, and deployment settings.
+
+In each row, give the module and phase in `Scope`. Use separate rows for the build JDK, Java compilation target, and runtime JVM. If the declared range and the resolved version differ, give both values. Cite repository lines for each value in `Evidence`.
+
+Use `Unknown` if the source confirms the component but its version is unknown. Cite that source. Use `None recorded.` when there are no rows. Record conflicts in `Known gaps and open questions`.
 
 ## Workflow
 
@@ -102,7 +111,7 @@ node "<skill-directory>/scripts/validate-codebase-rules.mjs" docs/CONSTRAINTS.md
 
 - The validator checks the title, field and section order, document date, template placeholders, and LF line endings.
 - It checks entry and gap IDs, categories, requirements, and index rows. It checks related and replacement IDs against the supplied documents.
-- It checks that source links resolve to the stated file and line inside the repository. For each convention, it requires at least two distinct example rows with source links.
+- It checks that source links resolve to the stated file and line inside the repository. It requires a source link in each technology version row. For each convention, it requires at least two distinct example rows with source links.
 
 ### Completion Requirements
 

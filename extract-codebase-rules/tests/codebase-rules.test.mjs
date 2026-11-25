@@ -10,6 +10,7 @@ const skill = fileURLToPath(new URL('../', import.meta.url));
 const constraints = 'handbook/CONSTRAINTS.md';
 const conventions = 'handbook/CONVENTIONS.md';
 const link = n => `[src/cache keys.js:${n}](../src/cache%20keys.js#L${n})`;
+const emptyVersions = '## Technology versions\n\nNone recorded.';
 
 function document(path) {
   const constraint = path === constraints;
@@ -31,7 +32,7 @@ function document(path) {
 
 The JavaScript cache in src/.
 
-## ${type} index
+${constraint ? `${emptyVersions}\n\n` : ''}## ${type} index
 
 | ID | Title | Category | Scope | Superseded by |
 | --- | --- | --- | --- | --- |
@@ -100,6 +101,43 @@ test('an installed validator checks each file and the pair at custom paths', t =
   expect(f.validate(conventions, constraints), 0, /PASS/);
   expect(f.run('--help'), 0, /Usage: node validate-codebase-rules\.mjs/);
   expect(f.run('--unknown'), 2, /option/i);
+});
+
+test('requires Technology versions after Scope only in constraints', t => {
+  const f = fixture(t);
+  const legacy = document(constraints).replace(`${emptyVersions}\n\n`, '');
+  for (const text of [legacy, `${legacy}\n${emptyVersions}\n`]) {
+    f.write(constraints, text);
+    expect(f.validate(constraints), 1, /sections.*Technology versions/i);
+  }
+  f.write(conventions, document(conventions).replace('## Convention index', `${emptyVersions}\n\n## Convention index`));
+  expect(f.validate(conventions), 1, /sections/i);
+});
+
+test('validates separate Java build, target, and runtime versions and their evidence', t => {
+  const f = fixture(t);
+  f.write('build.gradle', "plugins { id 'java' }\njava.toolchain.languageVersion = JavaLanguageVersion.of(21)\ntasks.withType(JavaCompile).configureEach { options.release = 17 }\n");
+  f.write('Dockerfile', 'FROM eclipse-temurin:17-jre\n');
+  const runtimeLink = '[Dockerfile:1](../Dockerfile#L1)';
+  const versions = `## Technology versions
+
+| Component | Version | Scope | Evidence |
+| --- | --- | --- | --- |
+| JDK | 21 | Service build toolchain | [build.gradle:2](../build.gradle#L2) |
+| Java | 17 | Service compilation target | [build.gradle:3](../build.gradle#L3) |
+| Java runtime | 17 | Service runtime image | ${runtimeLink} |`;
+  const text = document(constraints).replace(emptyVersions, versions);
+  f.write(constraints, text);
+  expect(f.validate(constraints, conventions), 0, /PASS/);
+
+  for (const [before, after, message] of [
+    ['| Component |', '| Technology |', /Technology versions.*columns/i],
+    [runtimeLink, '[Dockerfile](../Dockerfile)', /Technology versions.*source line link/i],
+    [runtimeLink, '[Dockerfile:2](../Dockerfile#L2)', /source line outside file/i],
+  ]) {
+    f.write(constraints, text.replace(before, after));
+    expect(f.validate(constraints), 1, message);
+  }
 });
 
 test('empty template sections and retained template comments are valid', t => {

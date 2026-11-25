@@ -8,6 +8,12 @@
 
 <Summarize what changes must preserve across the codebase. State what you inspected, including the main modules, languages, platforms, and build configurations.>
 
+## Technology versions
+
+| Component | Version | Scope | Evidence |
+| --- | --- | --- | --- |
+| <Component name> | <Version or range> | <Module and phase> | [<repository-relative-path>:<line-number>](<path-relative-to-document>#L<line-number>) |
+
 ## Constraint index
 
 

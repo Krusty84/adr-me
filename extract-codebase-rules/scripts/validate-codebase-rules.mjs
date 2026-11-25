@@ -235,7 +235,9 @@ function validate(file, root, counts) {
   const doc = split(text);
   const model = split(template);
   sameOrder(doc.items, model.items, "Sections");
-  const [, index, rules, observed, gaps] = model.items.keys();
+  const [, ...sections] = model.items.keys();
+  const versions = type === "CONSTRAINTS" ? sections.shift() : null;
+  const [index, rules, observed, gaps] = sections;
   for (const [name, body] of doc.items) {
     check(body && !/^#{1,2} |^#{4,6} /m.test(body), `${name}: empty section or unexpected heading`);
     if (name !== rules && name !== observed) check(!/^### /m.test(body), `Unexpected heading in ${name}`);
@@ -243,6 +245,11 @@ function validate(file, root, counts) {
   const metadata = fields(doc.intro, "Metadata");
   checkFields(metadata, fields(model.intro, "Template"), "Metadata");
   check(validDate(metadata.get("Date")), "Invalid document date");
+  if (versions && doc.items.get(versions) !== emptySection) {
+    for (const [component, , , evidence] of table(doc.items.get(versions), model.items.get(versions), versions)) {
+      check(sourceLinks(evidence).length, `${versions}: ${component} needs a source line link`);
+    }
+  }
   const categories = model.items.get(rules).match(/^- \*\*Category:\*\* <(.+)>$/m)[1].split(" | ");
   const findings = new Map();
   const prefix = type === "CONSTRAINTS" ? "C" : "V";
